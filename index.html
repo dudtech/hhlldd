@@ -8,7 +8,9 @@
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getDatabase, ref, push, set, onValue, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+  import { getDatabase, ref, push, set, onValue, get, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+  import { getAuth, signInAnonymously, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
   // ===== НАСТРОЙКИ FIREBASE =====
   const firebaseConfig = {
@@ -24,9 +26,13 @@
   try {
     if (!firebaseConfig.databaseURL) throw new Error('Организатору: добавь databaseURL в настройки Firebase внутри index.html.');
     const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    await setPersistence(auth, browserLocalPersistence);
+    await auth.authStateReady();
+    if (!auth.currentUser) await signInAnonymously(auth);
     window.FB = {
-      db: getDatabase(app),
-      ref, push, set, onValue, runTransaction
+      db: getDatabase(app), uid: auth.currentUser.uid,
+      ref, push, set, onValue, get, runTransaction
     };
     document.dispatchEvent(new Event('fb-ready'));
   } catch (error) {
@@ -35,8 +41,6 @@
   }
 </script>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -209,6 +213,76 @@
   .cocktail-detail-label { font-weight:700; margin-bottom:10px; }
   #cocktail-detail ul { padding-left:22px; line-height:1.9; }
   #closeCocktailBtn { color:#2b1733; }
+
+  /* ===== АДАПТИВНОЕ ЦЕНТРИРОВАНИЕ И КАРТОЧКИ С МЫШКАМИ ===== */
+  dialog { position:fixed; inset:0; margin:auto; }
+  #cocktailDialog { margin:auto; width:min(420px,calc(100vw - 32px)); max-height:calc(100dvh - 32px); }
+  .cocktail-detail-card { padding:56px 28px 48px; }
+  .bat-corner { position:absolute; top:14px; left:14px; font-size:24px; line-height:1; pointer-events:none; }
+  .bat-bottom { top:auto; left:auto; bottom:14px; right:14px; transform:rotate(180deg); }
+  .chosen-corner { font-size:24px; }
+  .chosen-drink:nth-child(2) { color:#25142c; }
+  .drink-card { position:relative; background:linear-gradient(135deg,#fffaf2,#ede3db); color:#25142c; border:2px solid #eadbd1; padding:40px 22px; text-align:center; }
+  .drink-card.selected { background:#fff0db; border-color:#ff7a18; box-shadow:inset 0 0 0 2px #ff7a18; }
+  .drink-card h3 { color:#713144; }
+  .drink-card p { color:#432d4a; }
+  .drink-card .drink-type { color:#785368; }
+  .drink-card .drink-art { background:radial-gradient(ellipse,#e8d7e7,transparent 72%); }
+  .drink-card .btn-ghost { color:#432d4a; border-color:#9c7d9f; }
+  .drink-card.selected .btn { background:#ff7a18; color:#261126; }
+  .drink-carousel { scroll-snap-type:x mandatory; }
+  .drink-card { scroll-snap-align:center; }
+  #screen-vote > h2, #screen-vote > .vote-eyebrow, .characters-main > h2, .characters-main > .section-sub { text-align:center; }
+  #vote-done { display:block; margin:24px auto; }
+  .characters-main .carousel { display:flex; flex-wrap:wrap; justify-content:center; }
+  .characters-main .char-card { flex:0 1 300px; width:100%; }
+  @media(max-width:480px) {
+    .drink-carousel { padding-inline:calc((100% - 260px)/2); }
+    .drink-card { flex:0 0 260px; max-width:260px; }
+    .chosen-drink { width:140px; margin-left:-70px; }
+    .cocktail-detail-card { padding:54px 22px 44px; }
+  }
+  @media(max-width:350px) { .chosen-drinks { transform:scale(.88); } }
+
+  .color-picker { border:0; margin:22px 0; padding:0; }
+  .color-picker legend { margin-bottom:14px; color:#fff0e5; }
+  .color-options { display:grid; grid-template-columns:repeat(4,1fr); gap:16px 8px; }
+  .color-option { display:flex; flex-direction:column; align-items:center; gap:6px; cursor:pointer; position:relative; }
+  .color-option input { position:absolute; opacity:0; width:40px; height:40px; }
+  .color-option > span { width:36px; height:36px; border-radius:50%; border:3px solid transparent; }
+  .color-option input:checked + span { outline:2px solid #fff0e5; outline-offset:3px; border-color:#2b1733; }
+  .color-option input:focus-visible + span { outline:3px dashed #ff7a18; outline-offset:4px; }
+  .color-option small { font-size:10px; color:#fff0e5; }
+  .guest-card, #charFull { background:var(--guest-color,#ffd2b3); color:#2c2034; border:1px solid var(--guest-color,#ffd2b3); }
+  .guest-card { display:flex; flex-direction:column; }
+  .guest-heading { padding:24px 22px 20px; display:flex; align-items:flex-start; gap:12px; border-bottom:1px solid #2c203425; }
+  .guest-heading h3, #charFull .guest-heading h3 { color:#2c2034; font-size:1.6rem; line-height:1.2; overflow-wrap:anywhere; flex:1; margin:0; }
+  .guest-heading .like-btn { position:static; flex-shrink:0; margin-left:auto; background:#ffffff80; color:#2c2034; border-color:#2c203430; backdrop-filter:none; }
+  .guest-heading .like-btn.liked { background:#2c2034; color:#fff6eb; }
+  .guest-details { padding:22px; display:flex; flex-direction:column; flex:1; gap:20px; overflow-wrap:anywhere; }
+  .guest-field { display:flex; flex-direction:column; gap:5px; }
+  .guest-details small { display:block; color:#61506a; font-size:.72rem; letter-spacing:.04em; margin-bottom:5px; }
+  .guest-mood { margin-top:auto; padding-top:18px; border-top:1px dashed #2c203450; }
+  .guest-mood strong { font-size:1.2rem; }
+  #charFull .guest-heading { padding-right:62px; }
+  #closeCharBtn { color:#2c2034; background:#ffffff90; }
+  .guest-actions { display:flex; justify-content:flex-end; padding:0 22px 22px; }
+  .guest-actions .btn { color:#2c2034; border-color:#2c203440; background:#ffffff80; }
+
+  /* ===== ТЁМНЫЕ КАРТОЧКИ ГОСТЕЙ ===== */
+  .guest-card, #charFull { background:#1c1424; color:#f3e9ff; border:1px solid var(--border); }
+  .guest-heading { background:linear-gradient(135deg,#351747,#39201b); border-bottom:1px solid var(--border); }
+  .guest-heading h3, #charFull .guest-heading h3 { color:#fff0e5; }
+  .guest-details small { color:#bdaacb; }
+  .guest-field strong { color:var(--orange); }
+  .guest-mood { border-top:1px dashed #ffffff26; }
+  .guest-mood strong { color:#ffd0a8; }
+  .guest-heading .like-btn { background:#100a16b3; color:#fff0e5; border-color:#ffffff26; }
+  .guest-heading .like-btn.liked { background:var(--orange); color:#241020; }
+  #closeCharBtn { color:#fff0e5; background:#100a16b3; }
+  .guest-actions .btn { background:#100a16b3; color:#fff0e5; border-color:#ffffff26; }
+  .vote-notice { text-align:center; padding:18px 20px; margin:0 auto 22px; max-width:650px; background:#241528; border:4px solid var(--orange); border-radius:16px; font-weight:600; color:#fff0e5; box-shadow:0 0 20px #ff7a1826; }
+  [data-character-vote]:disabled { opacity:.55; cursor:not-allowed; }
 </style>
 </head>
 <body>
@@ -218,7 +292,6 @@
   <h1>🎃 Скоро...</h1>
   <p>Спасибо! Твоя карточка принята.</p>
   <p>Суббота 31.10 в 18:00</p>
-  <p>Сайт откроется 31 октября в 10:00 · время московское</p>
   <div class="countdown" id="countdownWait"></div>
   <button class="btn btn-ghost" id="show-drink-votes" style="margin-top:24px">🍹 Посмотреть голоса за коктейли</button>
 </section>
@@ -242,37 +315,16 @@
     <p class="hint">это я, а это кто</p>
     <form id="charForm">
       <div class="field">
-        <label>Имя <span class="req">*</span></label>
+        <label for="name">Имя <span class="req">*</span></label>
         <input type="text" id="name" required maxlength="40" placeholder="Как тебя зовут?">
       </div>
       <div class="field">
-        <label>Персонаж <span class="req">*</span></label>
-        <input type="text" id="persona" required maxlength="60" placeholder="Вампир, ведьма, зомби...">
+        <label for="persona">Персонаж <span class="req">*</span></label>
+        <input type="text" id="persona" required maxlength="60" placeholder="Вампир, ведьма, зондби...">
       </div>
-      <div class="field">
-        <label>Самое сложное в костюме</label>
-        <input type="text" id="hardest" maxlength="80" placeholder="Макияж, рога, парик...">
-      </div>
-      <div class="field">
-        <label>Что делал(а) при подготовке</label>
-        <input type="text" id="prep" maxlength="100" placeholder="Пересмотрел(а) 5 ужастиков, клеил(а) ресницы...">
-      </div>
-      <div class="field">
-        <label>Любимый фильм / игра ужасов</label>
-        <input type="text" id="favorite" maxlength="80" placeholder="«Звонок», Silent Hill...">
-      </div>
-      <div class="field">
-        <label>Настрой на вечеринку</label>
-        <input type="text" id="mood" maxlength="60" placeholder="Ужасно весёлый 😈">
-      </div>
-      <div class="field">
-        <label>Цитата персонажа (или та, что ему подходит)</label>
-        <textarea id="quote" maxlength="200" placeholder="«Я вернусь...»"></textarea>
-      </div>
-      <div class="field">
-        <label>Секретное сообщение для других гостей</label>
-        <input type="text" id="secret" maxlength="100" placeholder="«Берегись ведьмы», «Я приду за тобой»">
-      </div>
+      <div class="field"><label for="favorite">Любимый ужастик</label><input type="text" id="favorite" maxlength="80" placeholder="«Звонок», Silent Hill…"></div>
+      <div class="field"><label for="mood">Настрой на вечер одним словом</label><input type="text" id="mood" maxlength="30" pattern="[^\s]+" title="Одно слово без пробелов" placeholder="Зловещий"></div>
+      <div class="field"><label for="soundtrack">Саундтрек вечера</label><input id="soundtrack" type="text" maxlength="120" placeholder="Исполнитель - название трека"></div>
       <button type="submit" class="btn btn-full" id="submitBtn">🎃 Отправить</button>
     </form>
   </div>
@@ -282,7 +334,7 @@
 <div id="screen-party" hidden>
 
   <header class="hero">
-    <h1>С Хэллоуином!</h1>
+    <h1>Бу! Испугался?</h1>
     <p>Добро пожаловать на вечеринку 🎃</p>
   </header>
 
@@ -290,69 +342,13 @@
 
   <section class="container characters-main">
     <h2>Кто есть кто</h2>
-    <p class="section-sub">Кликни на карточку — откроется полностью. Повторное нажатие на сердце снимает лайк.</p>
+    <p id="character-vote-status" class="vote-notice" role="status" aria-live="polite">Подключаемся…</p>
     <div class="carousel-wrap">
       <div class="carousel" id="carousel"></div>
     </div>
     <div style="margin-top:16px;">
-      <button class="btn btn-ghost" id="addLateBtn">➕ Добавить свою карточку</button>
+      <button class="btn btn-ghost" id="addLateBtn">🎃 Создать карточку</button>
     </div>
-  </section>
-
-  <section class="container">
-    <h2>Как всё прошло?</h2>
-    <p class="section-sub">Честно, с юмором, без официоза. Можно анонимно 💀</p>
-    <form class="feedback-card" id="feedbackForm">
-      <div class="field">
-        <label>🎃 Насколько всё было ужасно (в хорошем смысле)?</label>
-        <div class="rating">
-          <label><input type="radio" name="rating" value="1" required><span>🎃</span></label>
-          <label><input type="radio" name="rating" value="2"><span>🎃🎃</span></label>
-          <label><input type="radio" name="rating" value="3"><span>🎃🎃🎃</span></label>
-          <label><input type="radio" name="rating" value="4"><span>🎃🎃🎃🎃</span></label>
-          <label><input type="radio" name="rating" value="5"><span>🎃🎃🎃🎃🎃</span></label>
-        </div>
-      </div>
-      <div class="field">
-        <label>👑 Лучший костюм вечера — по твоей версии</label>
-        <input type="text" id="bestCostume" maxlength="60" placeholder="Имя или персонаж">
-      </div>
-      <div class="field">
-        <label>🏆 Какой конкурс зашёл больше всех?</label>
-        <select id="bestContest">
-          <option value="">Выбери конкурс</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>😂 Самый ржачный момент вечера</label>
-        <textarea id="funniest" maxlength="300" placeholder="Что до сих пор вспоминаешь?"></textarea>
-      </div>
-      <div class="field">
-        <label>💬 Одна фраза вечера, которая застряла в голове</label>
-        <input type="text" id="quoteOfTheNight" maxlength="150" placeholder="«Я не зомби, я просто устал»">
-      </div>
-      <div class="field">
-        <label>🎭 Куда делся твой персонаж к концу вечера?</label>
-        <input type="text" id="characterFate" maxlength="100" placeholder="Зомби стал уставшим человеком, ведьма потеряла шляпу...">
-      </div>
-      <div class="field">
-        <label>🔮 Что добавим в следующий раз?</label>
-        <textarea id="nextTime" maxlength="300" placeholder="Конкурс, музыка, еда... (можно пропустить)"></textarea>
-      </div>
-      <div class="field">
-        <label>🎃 Придёшь в следующем году?</label>
-        <div class="radio-group">
-          <label class="pill"><input type="radio" name="nextYear" value="yes" checked><span>🎃 Обязательно</span></label>
-          <label class="pill"><input type="radio" name="nextYear" value="maybe"><span>🤔 Подумаю</span></label>
-          <label class="pill"><input type="radio" name="nextYear" value="no"><span>💀 Только если не надо готовить костюм</span></label>
-        </div>
-      </div>
-      <div class="field">
-        <label>💌 Секретное сообщение оргам</label>
-        <textarea id="secretMessage" maxlength="300" placeholder="Можно анонимно. Только по-доброму 😈"></textarea>
-      </div>
-      <button type="submit" class="btn btn-full" id="feedbackSubmit">Отправить 💜</button>
-    </form>
   </section>
 
   <footer>Сделано с 🎃 для своих</footer>
@@ -396,15 +392,15 @@ const MENU = {
     {
       icon: '🐛',
       name: 'Мармеладные черви',
-      count: '2–3 упаковки',
+      count: '2-3 упаковки',
       ingredients: 'Готовые (Haribo, Crazy Factory)',
-      howto: 'Воткнуть червей в шоколадный пудинг — «земля с червями». Или в красное желе — «кровавая почва».'
+      howto: 'Воткнуть червей в шоколадный пудинг - «земля с червями». Или в красное желе - «кровавая почва».'
     },
     {
       icon: '🚬',
       name: '«Сигареты» из солёных палочек',
-      count: '~40–50 шт',
-      ingredients: 'Солёные палочки 200–250 г · белый шоколад / белая глазурь 200–300 г · шоколадное печенье 200 г (в крошку)',
+      count: '~40-50 шт',
+      ingredients: 'Солёные палочки 200-250 г · белый шоколад / белая глазурь 200-300 г · шоколадное печенье 200 г (в крошку)',
       howto: 'Растопить белый шоколад, обмакнуть палочку на 2/3, кончик обвалять в шоколадной крошке («пепел»). Выложить на пергамент до застывания.'
     },
     {
@@ -412,27 +408,27 @@ const MENU = {
       name: 'Кексы с глазами',
       count: '20 шт',
       ingredients: 'Готовые кексы / маффины 20 шт · белая глазурь / мастика 300 г · тёмный шоколад или M&M для зрачков 200 г · красный джем',
-      howto: 'На каждый кекс — 2 шарика из глазури, вставить зрачок. Капля красного джема — «веко».'
+      howto: 'На каждый кекс - 2 шарика из глазури, вставить зрачок. Капля красного джема - «веко».'
     },
     {
       icon: '🌭',
       name: 'Сосиски в тесте «Мумии»',
       count: '40 шт',
-      ingredients: 'Сосиски 40 шт (~2 кг) · слоёное тесто 4–5 упак (~2 кг) · горчица / кетчуп для глаз · кунжут',
-      howto: 'Обмотать сосиску полосками теста крест-накрест. Выпечь при 200°C ~20 мин. Точки глаз — горчицей.'
+      ingredients: 'Сосиски 40 шт (~2 кг) · слоёное тесто 4-5 упак (~2 кг) · горчица / кетчуп для глаз · кунжут',
+      howto: 'Обмотать сосиску полосками теста крест-накрест. Выпечь при 200°C ~20 мин. Точки глаз - горчицей.'
     },
     {
       icon: '🧠',
-      name: '«Мозги» — крабовый салат',
+      name: '«Мозги» - крабовый салат',
       count: '1 большой «мозг»',
       ingredients: 'Крабовые палочки 500 г · сыр 300 г · чеснок 1 головка · майонез 400 г · зелень 1 пучок · паприка',
-      howto: 'Смешать ингредиенты, сформировать полусферу. Вилкой сделать «извилины», посыпать паприкой. Сверху — «кровь» из кетчупа.'
+      howto: 'Смешать ингредиенты, сформировать полусферу. Вилкой сделать «извилины», посыпать паприкой. Сверху - «кровь» из кетчупа.'
     },
     {
       icon: '🪦',
-      name: '«Кладбище» — гуакамоле с чипсами',
+      name: '«Кладбище» - гуакамоле с чипсами',
       count: 'Большая миска',
-      ingredients: 'Авокадо 7–8 шт · лайм 4 шт · помидоры 2 шт · красный лук 1 шт · кинза 1 пучок · соль · чипсы-тортильи 3 упак',
+      ingredients: 'Авокадо 7-8 шт · лайм 4 шт · помидоры 2 шт · красный лук 1 шт · кинза 1 пучок · соль · чипсы-тортильи 3 упак',
       howto: 'Размять авокадо, добавить сок лайма, нарезанные овощи, кинзу. На чипсах зубочисткой нацарапать «R.I.P.» и имена.'
     },
     {
@@ -444,38 +440,38 @@ const MENU = {
     },
     {
       icon: '⚰️',
-      name: '«Гробы» — бутерброды',
+      name: '«Гробы» - бутерброды',
       count: '40 шт',
       ingredients: 'Хлеб для тостов 40 ломтиков · ветчина или паштет 500 г · сыр 300 г · огурцы 3 шт · масло сливочное 100 г',
-      howto: 'Вырезать хлеб в форме гроба (6-гранник). Внутрь — начинка. Сверху «крест» из полосок сыра.'
+      howto: 'Вырезать хлеб в форме гроба (6-гранник). Внутрь - начинка. Сверху «крест» из полосок сыра.'
     },
     {
       icon: '🎃',
       name: '«Тыква-хумус»',
       count: '1 тыква-тарелка',
       ingredients: 'Маленькая тыква (или мускатная) 1 шт · хумус готовый 500 г (или нут 2 банки + тахини 3 ст.л. + лимон + чеснок 2 зубчика + оливковое масло) · тыквенные семечки 50 г',
-      howto: 'Срезать верх тыквы, вычистить. Поставить внутрь миску с хумусом. Сверху — семечки. Тыква работает как тарелка.'
+      howto: 'Срезать верх тыквы, вычистить. Поставить внутрь миску с хумусом. Сверху - семечки. Тыква работает как тарелка.'
     },
     {
       icon: '🧟',
       name: '«Мозги» из желе',
       count: '1 большой «мозг»',
       ingredients: 'Желе малиновое / клубничное 3 пачки по 90 г · форма для мозга · сгущёнка 1 банка',
-      howto: 'Залить желе в форму для мозга (или полусферу), дать застыть. Сверху — полоски сгущёнки как «извилины».'
+      howto: 'Залить желе в форму для мозга (или полусферу), дать застыть. Сверху - полоски сгущёнки как «извилины».'
     },
     {
       icon: '🍫',
       name: 'Шоколадный пудинг с «землёй»',
-      count: '15–20 порций',
-      ingredients: 'Готовый шоколадный пудинг 15–20 стаканчиков · Oreo или шоколадное печенье 2–3 упак · мармеладные черви 2 упак',
+      count: '15-20 порций',
+      ingredients: 'Готовый шоколадный пудинг 15-20 стаканчиков · Oreo или шоколадное печенье 2-3 упак · мармеладные черви 2 упак',
       howto: 'Пудинг в стаканчики, сверху крошка печенья, «закопать» червей в крошку.'
     },
     {
       icon: '💉',
-      name: '«Шприцы с кровью» — шот «Кровь вампира»',
-      count: '~30 шприцев по 20–30 мл',
+      name: '«Шприцы с кровью» - шот «Кровь вампира»',
+      count: '~30 шприцев по 20-30 мл',
       ingredients: 'Водка 500 мл · гренадин 300 мл · вишнёвый или клубничный ликёр 250 мл · сок лайма 100 мл',
-      howto: 'Смешать всё в кувшине, набрать в шприцы без игл, охладить. Один шприц ≈ 20–30 мл. 15 чел × 2 шота = 30 шт.'
+      howto: 'Смешать всё в кувшине, набрать в шприцы без игл, охладить. Один шприц ≈ 20-30 мл. 15 чел × 2 шота = 30 шт.'
     }
   ],
   cocktails: [
@@ -496,7 +492,7 @@ const MENU = {
     {
         "id": "zombie",
         "icon": "🍹🧟",
-        "name": "Тропический зомби",
+        "name": "Тропический зондби",
         "count": "с алкоголем",
         "ingredients": "Ром светлый · Ром тёмный · Ананасовый сок · Сок лайма · Гренадин · Лёд"
     },
@@ -541,12 +537,12 @@ let voteScreenPinned = false;
 let voteListenerStarted = false;
 
 const CONTESTS = [
-  { icon: '🧻', title: 'Мумия', meta: '2–4 пары · 5 мин', steps: ['Разбейтесь на пары.', 'За 2 минуты обмотайте партнёра бумагой.', 'Побеждает самая плотная и быстрая мумия.'] },
-  { icon: '🍎', title: 'Яблоко на нитке', meta: '4+ игроков · 5 мин', steps: ['Подвесьте яблоки на уровне рта.', 'Руки за спину.', 'Кто первым съест — победил.'] },
-  { icon: '🎬', title: 'Ужастик по эмодзи', meta: '2–6 игроков · 10 мин', steps: ['Ведущий показывает эмодзи.', 'Игроки угадывают фильм ужасов.', 'Больше всех угадал — победил.'] },
-  { icon: '🎃', title: 'Тыквенный боулинг', meta: '2–8 игроков · 10 мин', steps: ['Выстройте кегли.', 'С 3 шагов катните тыкву.', 'Сбил больше всех — победил.'] },
-  { icon: '🧹', title: 'Метла-лимпо', meta: 'Все · 10 мин', steps: ['Играет музыка — проходите под метлой.', 'Каждый круг метла ниже.', 'Кто не согнулся — победил.'] },
-  { icon: '🏷️', title: 'Кто я?', meta: '3+ игроков · 10 мин', steps: ['Каждому на лоб стикер с монстром.', 'Задавайте вопросы «да/нет».', 'Кто угадал первым — победил.'] },
+  { icon: '🧻', title: 'Мумия', meta: '2-4 пары · 5 мин', steps: ['Разбейтесь на пары.', 'За 2 минуты обмотайте партнёра бумагой.', 'Побеждает самая плотная и быстрая мумия.'] },
+  { icon: '🍎', title: 'Яблоко на нитке', meta: '4+ игроков · 5 мин', steps: ['Подвесьте яблоки на уровне рта.', 'Руки за спину.', 'Кто первым съест - победил.'] },
+  { icon: '🎬', title: 'Ужастик по эмодзи', meta: '2-6 игроков · 10 мин', steps: ['Ведущий показывает эмодзи.', 'Игроки угадывают фильм ужасов.', 'Больше всех угадал - победил.'] },
+  { icon: '🎃', title: 'Тыквенный боулинг', meta: '2-8 игроков · 10 мин', steps: ['Выстройте кегли.', 'С 3 шагов катните тыкву.', 'Сбил больше всех - победил.'] },
+  { icon: '🧹', title: 'Метла-лимпо', meta: 'Все · 10 мин', steps: ['Играет музыка - проходите под метлой.', 'Каждый круг метла ниже.', 'Кто не согнулся - победил.'] },
+  { icon: '🏷️', title: 'Кто я?', meta: '3+ игроков · 10 мин', steps: ['Каждому на лоб стикер с монстром.', 'Задавайте вопросы «да/нет».', 'Кто угадал первым - победил.'] },
 ];
 /* ====================================== */
 
@@ -568,10 +564,11 @@ const waitForFB = () => new Promise((resolve, reject) => {
 });
 
 // ===== ЛОКАЛЬНЫЕ ФЛАГИ =====
+const memoryFlags = new Map();
 const localFlags = {
-  removeItem(key) { try { localStorage.removeItem(key); } catch {} },
-  getItem(key) { try { return localStorage.getItem(key); } catch { return null; } },
-  setItem(key, value) { try { localStorage.setItem(key, value); } catch { /* Приватный режим браузера. */ } }
+  removeItem(key) { memoryFlags.delete(key); try { localStorage.removeItem(key); } catch {} },
+  getItem(key) { if(memoryFlags.has(key)) return memoryFlags.get(key); try { return localStorage.getItem(key); } catch { return null; } },
+  setItem(key, value) { memoryFlags.set(key, String(value)); try { localStorage.setItem(key, value); } catch { /* Приватный режим браузера. */ } }
 };
 
 function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -580,6 +577,65 @@ let toastTimer;
 function toast(msg) {
   const el = $('#toast'); el.textContent = msg; el.classList.add('show');
   clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
+}
+
+
+// ===== АНОНИМНЫЙ УЧАСТНИК И ТРИ ГОЛОСА =====
+const VOTING_START = Date.parse('2026-10-31T18:00:00+03:00');
+let sessionReady = false, ownCharacter = false, connected = false;
+let serverOffset = 0, clockReady = false, ballotsReady = false, ballotBusy = false;
+let characterData = {}, ballots = {};
+function votingOpen() { return clockReady && Date.now() + serverOffset >= VOTING_START; }
+function ownChoices() { return Object.values(ballots[window.FB?.uid] || {}).filter(Boolean); }
+function nextBallot(current, id) {
+  const selected = [current?.first, current?.second, current?.third].filter(Boolean);
+  const index = selected.indexOf(id);
+  if (index >= 0) selected.splice(index, 1);
+  else if (selected.length < 3) selected.push(id);
+  else return undefined;
+  return { first: selected[0] || '', second: selected[1] || '', third: selected[2] || '' };
+}
+function updateVotingUI() {
+  const status = $('#character-vote-status');
+  const choices = ownChoices();
+  status.textContent = !sessionReady ? 'Подключаемся…' : !connected ? 'Нет соединения. Голосование временно недоступно.' : !clockReady ? 'Проверяем время…' : !votingOpen() ? 'Голосование откроется 31 октября в 18:00 по Москве' : !ownCharacter ? 'Заполни карточку, чтобы получить три голоса' : !ballotsReady ? 'Загружаем голоса…' : `Осталось голосов: ${3 - choices.length} из 3. Голос можно снять и переставить.`;
+  $('#addLateBtn').hidden = ownCharacter;
+  $('#addLateBtn').disabled = !sessionReady || !connected;
+  document.querySelectorAll('[data-character-vote]').forEach(button => {
+    const selected = choices.includes(button.dataset.characterVote);
+    button.disabled = !sessionReady || !connected || !votingOpen() || !ownCharacter || !ballotsReady || ballotBusy || (!selected && choices.length >= 3);
+  });
+}
+function rebuildCharacters() {
+  const counts = {};
+  for (const ballot of Object.values(ballots)) for (const id of new Set(Object.values(ballot || {}).filter(Boolean))) counts[id] = (counts[id] || 0) + 1;
+  window.__characters = Object.entries(characterData).map(([id,c]) => ({...c,id,likes:counts[id] || 0})).sort((a,b) => b.likes-a.likes || b.createdAt-a.createdAt);
+  renderCarousel(window.__characters);
+  if ($('#charDialog').open) openChar(window.currentCharacterId);
+  updateVotingUI();
+}
+async function startSession() {
+  try {
+    await waitForFB();
+    const fb = window.FB;
+    fb.onValue(fb.ref(fb.db, '.info/connected'), snap => { connected = snap.val() === true; updateVotingUI(); });
+    fb.onValue(fb.ref(fb.db, '.info/serverTimeOffset'), snap => { serverOffset = Number(snap.val()) || 0; clockReady = true; updateVotingUI(); });
+    const [card, drinks] = await Promise.all([fb.get(fb.ref(fb.db,'characters/' + fb.uid)), fb.get(fb.ref(fb.db,'cocktailVotes/' + fb.uid))]);
+    ownCharacter = !!card.val();
+    localFlags.removeItem('char_submitted');
+    if (ownCharacter) localFlags.setItem('char_submitted',fb.uid);
+    if (drinks.val()) { localFlags.setItem('drinks_voted_' + fb.uid,'1'); showSavedDrinkVote(drinks.val()); }
+    else localFlags.removeItem('drinks_voted_' + fb.uid);
+    sessionReady = true;
+    switchScreen();
+    updateVotingUI();
+  } catch(error) {
+    $('#character-vote-status').textContent = 'Не удалось подключиться. Обнови страницу после проверки интернета.';
+    $('#submitBtn').disabled = true;
+    $('#addLateBtn').disabled = true;
+    console.error(error);
+    toast('Не удалось войти. Проверь интернет и настройки Firebase.');
+  }
 }
 
 // ===== ТАЙМЕР =====
@@ -601,13 +657,15 @@ function tick() {
 
 // ===== ЭКРАНЫ =====
 function switchScreen() {
-  const now = Date.now();
+  if (!sessionReady) return;
+  if ($('#charFormDialog').open && !$('#screen-party').hidden) return;
+  const now = Date.now() + serverOffset;
   const preview = new URLSearchParams(location.search).get('preview');
   const submitted = localFlags.getItem('char_submitted');
   const partyOpen = preview === 'party' || (preview !== 'wait' && now >= PARTY_DATE.getTime());
 
   const voted = submitted && localFlags.getItem('drinks_voted_' + submitted);
-  if (preview !== 'party' && preview !== 'wait' && submitted && (!voted || voteScreenPinned)) {
+  if ((voteScreenPinned || (preview !== 'party' && preview !== 'wait' && !partyOpen && !voted)) && submitted) {
     $('#screen-wait').hidden = true;
     $('#screen-party').hidden = true;
     $('#charFormDialog').close();
@@ -644,7 +702,7 @@ function renderChosenDrinks() {
   const key = selected.map(drink => drink.id).join(',');
   if (hand.dataset.selection === key) return;
   hand.dataset.selection = key;
-  hand.innerHTML = selected.map((drink, index) => `<button type="button" class="chosen-drink" data-cocktail="${esc(drink.id)}" style="--card-index:${index};--angle:${(index - 1) * 13}deg;--offset:${(index - 1) * 82}px" aria-label="${esc(drink.name)}" aria-pressed="false"><span class="chosen-corner" aria-hidden="true">${['♠','♦','♣'][index]}</span><span class="chosen-art" aria-hidden="true">${esc(drink.art)}</span><span class="chosen-name">${esc(drink.name)}</span><span class="chosen-caption">Твой выбор</span><span class="chosen-corner chosen-bottom" aria-hidden="true">${['♠','♦','♣'][index]}</span></button>`).join('');
+  hand.innerHTML = selected.map((drink, index) => `<button type="button" class="chosen-drink" data-cocktail="${esc(drink.id)}" style="--card-index:${index};--angle:${(index - 1) * 13}deg;--offset:${(index - 1) * 82}px" aria-label="${esc(drink.name)}" aria-pressed="false"><span class="chosen-art" aria-hidden="true">${esc(drink.art)}</span><span class="chosen-name">${esc(drink.name)}</span><span class="chosen-caption">Твой выбор</span></button>`).join('');
 }
 $('#chosen-drinks').addEventListener('click', event => {
   const card = event.target.closest('.chosen-drink');
@@ -729,6 +787,7 @@ $('#drink-carousel').addEventListener('click', event => {
 $('#vote-prev').addEventListener('click', () => $('#drink-carousel').scrollBy({ left: -280, behavior: 'smooth' }));
 $('#vote-next').addEventListener('click', () => $('#drink-carousel').scrollBy({ left: 280, behavior: 'smooth' }));
 $('#vote-submit').addEventListener('click', async () => {
+  if (!sessionReady || !connected) { toast('Нужно подключение к интернету'); return; }
   if (voteBusy || voteSaved || drinkSelection.size !== 3) return;
   const id = localFlags.getItem('char_submitted');
   if (!id) { $('#vote-status').textContent = 'Сначала заполни анкету гостя.'; return; }
@@ -740,8 +799,9 @@ $('#vote-submit').addEventListener('click', async () => {
   renderDrinkCards();
   try {
     await waitForFB();
-    await window.FB.set(window.FB.ref(window.FB.db, 'cocktailVotes/' + id), vote);
-    showSavedDrinkVote(vote);
+    const result = await window.FB.runTransaction(window.FB.ref(window.FB.db, 'cocktailVotes/' + id), current => current ? undefined : vote, { applyLocally: false });
+    if (result.committed) showSavedDrinkVote(vote);
+    else { const saved = await window.FB.get(window.FB.ref(window.FB.db,'cocktailVotes/' + id)); if (saved.val()) showSavedDrinkVote(saved.val()); }
   } catch (error) {
     $('#vote-status').textContent = 'Голоса не сохранены. Проверь соединение и попробуй ещё раз.';
     console.error(error);
@@ -760,34 +820,30 @@ $('#show-drink-votes').addEventListener('click', () => {
 $('#charForm').addEventListener('submit', async e => {
   e.preventDefault();
 
+  if (!sessionReady || !connected) { toast('Нужно подключение к интернету'); return; }
+  if (ownCharacter) { toast('Твоя карточка уже сохранена'); return; }
   const name = $('#name').value.trim();
   const persona = $('#persona').value.trim();
   if (!name || !persona) { toast('Имя и персонаж обязательны'); return; }
 
+  if (!$('#charForm').reportValidity()) return;
   const btn = $('#submitBtn');
   if (btn.disabled) return;
   btn.disabled = true; btn.textContent = 'Отправляем...';
 
   try {
     await waitForFB();
-    const newRef = window.FB.push(window.FB.ref(window.FB.db, 'characters'));
-
-    await window.FB.set(newRef, {
-      name, persona,
-      hardest: $('#hardest').value.trim(),
-      prep: $('#prep').value.trim(),
-      favorite: $('#favorite').value.trim(),
-      mood: $('#mood').value.trim(),
-      quote: $('#quote').value.trim(),
-      secret: $('#secret').value.trim(),
-      likes: 0,
-      createdAt: Date.now()
-    });
-
-    localFlags.setItem('char_submitted', newRef.key);
+    const fields = { name, persona, favorite: $('#favorite').value.trim(), mood: $('#mood').value.trim(), soundtrack: $('#soundtrack').value.trim() };
+    const uid = window.FB.uid;
+    const newRef = window.FB.ref(window.FB.db, 'characters/' + uid);
+    const result = await window.FB.runTransaction(newRef, current => current ? undefined : { ...fields, createdAt: Date.now() + serverOffset }, { applyLocally: false });
+    if (!result.committed) { ownCharacter = true; localFlags.setItem('char_submitted',uid); $('#charFormDialog').close(); updateVotingUI(); toast('Карточка уже создана в другой вкладке'); switchScreen(); return; }
+    ownCharacter = true;
+    localFlags.setItem('char_submitted', uid);
+    updateVotingUI();
     e.target.reset();
     $('#charFormDialog').close();
-    toast('Готово! Ждём тебя на вечеринке 🎃');
+    toast('Карточка сохранена 🦇');
     switchScreen();
   } catch (err) {
     console.error(err);
@@ -804,36 +860,34 @@ function initParty() {
   partyInited = true;
 
   listenCharacters();
-  fillContestSelect();
 
   $('#closeFormBtn').hidden = false;
-  $('#addLateBtn').addEventListener('click', () => $('#charFormDialog').showModal());
+  $('#addLateBtn').addEventListener('click', () => { if (ownCharacter || !sessionReady || !connected) return; $('#charForm').reset(); $('#charFormDialog').showModal(); });
   $('#closeFormBtn').addEventListener('click', () => $('#charFormDialog').close());
 
 }
 
-function fillContestSelect() {
-  const sel = $('#bestContest');
-  CONTESTS.forEach(c => {
-    const opt = document.createElement('option');
-    opt.value = c.title;
-    opt.textContent = `${c.icon} ${c.title}`;
-    sel.appendChild(opt);
-  });
+// ===== ЦВЕТ И СОДЕРЖИМОЕ КАРТОЧКИ =====
+function characterBody(c) {
+  return `<div class="guest-details"><div class="guest-field"><small>Персонаж</small><strong>${esc(c.persona)}</strong></div><div class="guest-field"><small>Любимый ужастик</small><span>${esc(c.favorite || 'Не указан')}</span></div><div class="guest-field"><small>Саундтрек вечера</small><span>${esc(c.soundtrack || 'Не указан')}</span></div><div class="guest-mood"><small>Настрой на вечер</small><strong>${esc(c.mood || 'Не указан')}</strong></div></div>`;
 }
 
 // ===== КАРУСЕЛЬ + ЛАЙКИ =====
 async function listenCharacters() {
   try {
-  await waitForFB();
-  window.FB.onValue(window.FB.ref(window.FB.db, 'characters'), snap => {
-    const data = snap.val();
-    const list = data ? Object.entries(data).map(([id, v]) => ({ id, ...v }))
-      .sort((a,b) => (b.likes||0) - (a.likes||0) || b.createdAt - a.createdAt) : [];
-    window.__characters = list;
-    renderCarousel(list);
-  }, error => { $('#carousel').textContent = 'Не удалось загрузить карточки. Проверь доступ к базе.'; console.error(error); });
-  } catch (error) { $('#carousel').textContent = error.message; }
+    await waitForFB();
+    const fb = window.FB;
+    fb.onValue(fb.ref(fb.db,'characters'), snap => {
+      characterData = snap.val() || {};
+      ownCharacter = !!characterData[fb.uid];
+      if (ownCharacter) localFlags.setItem('char_submitted',fb.uid);
+      else localFlags.removeItem('char_submitted');
+      rebuildCharacters();
+    }, error => { $('#carousel').textContent = 'Не удалось загрузить карточки.'; console.error(error); });
+    fb.onValue(fb.ref(fb.db,'characterVotes'), snap => {
+      ballots = snap.val() || {}; ballotsReady = true; rebuildCharacters();
+    }, error => { ballotsReady = false; updateVotingUI(); toast('Не удалось загрузить голоса'); console.error(error); });
+  } catch(error) { $('#carousel').textContent = error.message; }
 }
 
 function renderCarousel(list) {
@@ -844,41 +898,28 @@ function renderCarousel(list) {
     return;
   }
   el.innerHTML = list.map(c => {
-    const liked = localFlags.getItem('liked_' + c.id);
-    return `
-      <div class="char-card" onclick="openChar('${esc(c.id)}')">
-        <button class="like-btn ${liked ? 'liked' : ''}" onclick="event.stopPropagation(); likeChar('${esc(c.id)}')">❤️ <span>${c.likes || 0}</span></button>
-        <div class="character-banner" aria-hidden="true">🎃</div>
-        <div class="info">
-          <div class="name">${esc(c.name)}</div>
-          <div class="persona">${esc(c.persona)}</div>
-          ${c.quote ? `<div class="quote">«${esc(c.quote)}»</div>` : ''}
-        </div>
-      </div>`;
+    const liked = ownChoices().includes(c.id);
+    return `<div class="char-card guest-card" onclick="openChar('${esc(c.id)}')"><div class="guest-heading"><h3>${esc(c.name)}</h3><button data-character-vote="${esc(c.id)}" class="like-btn ${liked ? 'liked' : ''}" aria-label="${liked ? 'Снять голос' : 'Проголосовать'}" aria-pressed="${Boolean(liked)}" onclick="event.stopPropagation(); likeChar('${esc(c.id)}')">🎃 <span>${c.likes || 0}</span></button></div>${characterBody(c)}</div>`;
   }).join('');
   el.scrollLeft = scrollLeft;
+  updateVotingUI();
 }
 
 // ===== ПОСТАВИТЬ ИЛИ СНЯТЬ ЛАЙК =====
-const pendingLikes = new Set();
 window.likeChar = async function(id) {
-  if (pendingLikes.has(id)) return;
-  const wasLiked = Boolean(localFlags.getItem('liked_' + id));
-  pendingLikes.add(id);
+  if (ballotBusy || !sessionReady || !connected || !ballotsReady) return;
+  if (!votingOpen()) { toast('Голосование откроется 31 октября в 18:00'); return; }
+  if (!ownCharacter) { toast('Сначала создай свою карточку'); return; }
+  if (!characterData[id]) return;
+  const wasLiked = ownChoices().includes(id);
+  ballotBusy = true; updateVotingUI();
   try {
-    await waitForFB();
-    const result = await window.FB.runTransaction(window.FB.ref(window.FB.db, `characters/${id}/likes`), cur => {
-      if (wasLiked) return typeof cur === 'number' && cur > 0 ? cur - 1 : undefined;
-      return (cur || 0) + 1;
-    }, { applyLocally: false });
-    if (!result.committed) { toast('Счётчик обновился. Попробуй ещё раз.'); return; }
-    if (wasLiked) localFlags.removeItem('liked_' + id);
-    else localFlags.setItem('liked_' + id, '1');
-    renderCarousel(window.__characters || []);
-    if ($('#charDialog').open && window.currentCharacterId === id) openChar(id);
-    toast(wasLiked ? 'Лайк снят — можно выбрать другого 👻' : 'Лайк 💜');
-  } catch (err) { console.error(err); toast('Не удалось изменить лайк. Попробуй ещё раз.'); }
-  finally { pendingLikes.delete(id); }
+    const fb = window.FB;
+    const result = await fb.runTransaction(fb.ref(fb.db,'characterVotes/' + fb.uid), current => nextBallot(current,id), { applyLocally: false });
+    if (!result.committed) { toast('Все три голоса использованы. Сними один, чтобы выбрать другого.'); return; }
+    toast(wasLiked ? 'Голос снят - можно выбрать другого 👻' : 'Голос учтён 🎃');
+  } catch(error) { console.error(error); toast('Голос не сохранён. Проверь соединение и попробуй снова.'); }
+  finally { ballotBusy = false; updateVotingUI(); }
 };
 
 // ===== FULLSCREEN CARD =====
@@ -886,24 +927,10 @@ window.openChar = function(id) {
   const c = (window.__characters || []).find(x => x.id === id);
   if (!c) return;
   window.currentCharacterId = id;
-  const liked = localFlags.getItem('liked_' + id);
-  $('#charFullContent').innerHTML = `
-    <div class="character-banner" aria-hidden="true">🎃</div>
-    <div class="body">
-      <h3>${esc(c.name)}</h3>
-      <div class="persona">${esc(c.persona)}</div>
-      ${c.hardest ? `<div class="row"><b>Сложность костюма</b>${esc(c.hardest)}</div>` : ''}
-      ${c.prep ? `<div class="row"><b>Подготовка</b>${esc(c.prep)}</div>` : ''}
-      ${c.mood ? `<div class="row"><b>Настрой</b>${esc(c.mood)}</div>` : ''}
-      ${c.favorite ? `<div class="row"><b>Любимый ужастик</b>${esc(c.favorite)}</div>` : ''}
-      ${c.quote ? `<div class="row"><b>Цитата</b><i>«${esc(c.quote)}»</i></div>` : ''}
-      ${c.secret ? `<div class="row" style="margin-top:14px;padding-top:14px;border-top:1px dashed rgba(255,255,255,.1);"><b>💌 Секретное сообщение</b><i>«${esc(c.secret)}»</i></div>` : ''}
-      <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;">
-        <button class="btn ${liked ? '' : 'btn-ghost'}" onclick="likeChar('${esc(c.id)}')">❤️ ${c.likes || 0}</button>
-        <button class="btn btn-ghost" onclick="downloadCard('${esc(c.id)}')">📥 Скачать JPEG</button>
-      </div>
-    </div>`;
+  const liked = ownChoices().includes(id);
+  $('#charFullContent').innerHTML = `<div class="guest-heading"><h3>${esc(c.name)}</h3></div>${characterBody(c)}<div class="guest-actions"><button data-character-vote="${esc(c.id)}" class="btn ${liked ? '' : 'btn-ghost'}" aria-label="${liked ? 'Снять голос' : 'Проголосовать'}" aria-pressed="${Boolean(liked)}" onclick="likeChar('${esc(c.id)}')">🎃 ${c.likes || 0}</button></div>`;
   if (!$('#charDialog').open) $('#charDialog').showModal();
+  updateVotingUI();
 };
 
 $('#charFormDialog').addEventListener('cancel', e => {
@@ -912,75 +939,6 @@ $('#charFormDialog').addEventListener('cancel', e => {
 
 $('#closeCharBtn').addEventListener('click', () => $('#charDialog').close());
 $('#charDialog').addEventListener('click', e => { if (e.target === $('#charDialog')) $('#charDialog').close(); });
-
-// ===== СКАЧИВАНИЕ JPEG =====
-window.downloadCard = async function(id) {
-  const c = (window.__characters || []).find(x => x.id === id);
-  if (!c) return;
-  if (!window.html2canvas) { toast('Библиотека скачивания не загрузилась. Обнови страницу.'); return; }
-  const temp = document.createElement('div');
-  temp.style.cssText = 'width:420px;background:#0a0612;color:#f3e9ff;font-family:Rubik,sans-serif;border-radius:16px;overflow:hidden;overflow-wrap:anywhere;position:fixed;left:-9999px;top:0;';
-  temp.innerHTML = `
-    <div class="character-banner" aria-hidden="true">🎃</div>
-    <div style="padding:24px;">
-      <div style="font-family:Ruslan Display,serif;font-size:1.5rem;color:#ff7a18;">${esc(c.name)}</div>
-      <div style="color:#ff7a18;margin-bottom:12px;">${esc(c.persona)}</div>
-      ${c.hardest ? `<div style="margin-bottom:6px;font-size:.9rem;"><b style="color:#ffd0a8;">Сложность:</b> ${esc(c.hardest)}</div>` : ''}
-      ${c.prep ? `<div style="margin-bottom:6px;font-size:.9rem;"><b style="color:#ffd0a8;">Подготовка:</b> ${esc(c.prep)}</div>` : ''}
-      ${c.mood ? `<div style="margin-bottom:6px;font-size:.9rem;"><b style="color:#ffd0a8;">Настрой:</b> ${esc(c.mood)}</div>` : ''}
-      ${c.favorite ? `<div style="margin-bottom:6px;font-size:.9rem;"><b style="color:#ffd0a8;">Ужастик:</b> ${esc(c.favorite)}</div>` : ''}
-      ${c.quote ? `<div style="font-style:italic;color:#a99bb8;margin-top:10px;">«${esc(c.quote)}»</div>` : ''}
-      ${c.secret ? `<div style="margin-top:14px;padding-top:10px;border-top:1px dashed rgba(255,255,255,.15);font-style:italic;color:#ffd0a8;font-size:.85rem;">💌 «${esc(c.secret)}»</div>` : ''}
-      <div style="margin-top:16px;color:#ff7a18;font-weight:700;">🎃 Хэллоуин · ${c.likes || 0} ❤️</div>
-    </div>`;
-  document.body.appendChild(temp);
-  try {
-    await document.fonts.ready;
-    const canvas = await html2canvas(temp, { backgroundColor: '#0a0612', scale: 2, useCORS: false });
-    const link = document.createElement('a');
-    link.download = `card_${c.name.replace(/\s+/g,'_')}.jpg`;
-    link.href = canvas.toDataURL('image/jpeg', 0.92);
-    link.click();
-    toast('Скачано 📥');
-  } catch (err) { console.error(err); toast('Не удалось 😕'); }
-  finally { document.body.removeChild(temp); }
-};
-
-// ===== ФИДБЕК =====
-$('#feedbackForm').addEventListener('submit', async e => {
-  e.preventDefault();
-
-  const rating = e.target.querySelector('input[name="rating"]:checked');
-  if (!rating) { toast('Поставь оценку 🙂'); return; }
-  const nextYear = e.target.querySelector('input[name="nextYear"]:checked');
-
-  const btn = $('#feedbackSubmit');
-  if (btn.disabled) return;
-  btn.disabled = true; btn.textContent = 'Отправляем...';
-
-  try {
-    await waitForFB();
-    await window.FB.push(window.FB.ref(window.FB.db, 'feedback'), {
-      rating: Number(rating.value),
-      bestCostume: $('#bestCostume').value.trim(),
-      bestContest: $('#bestContest').value,
-      funniest: $('#funniest').value.trim(),
-      quoteOfTheNight: $('#quoteOfTheNight').value.trim(),
-      characterFate: $('#characterFate').value.trim(),
-      nextTime: $('#nextTime').value.trim(),
-      nextYear: nextYear ? nextYear.value : '',
-      secretMessage: $('#secretMessage').value.trim(),
-      createdAt: Date.now()
-    });
-    e.target.reset();
-    toast('Спасибо! Ты лучший(ая) 💜');
-  } catch (err) {
-    console.error(err);
-    toast('Ошибка: ' + (err.message || 'попробуй ещё раз'));
-  } finally {
-    btn.disabled = false; btn.textContent = 'Отправить 💜';
-  }
-});
 
 // ===== ДИАГНОСТИКА ПОДКЛЮЧЕНИЯ =====
 function showFirebaseError() {
@@ -993,7 +951,8 @@ document.addEventListener('fb-error', showFirebaseError, { once: true });
 if (window.FB_ERROR) showFirebaseError();
 
 // ===== СТАРТ =====
-switchScreen();
+startSession();
+setInterval(updateVotingUI, 1000);
 setInterval(tick, 1000);
 setInterval(switchScreen, 30000);
 </script>
