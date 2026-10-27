@@ -1,0 +1,1004 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🎃 Хэллоуин-вечеринка</title>
+<link href="https://fonts.googleapis.com/css2?family=Ruslan+Display&family=Rubik:wght@400;600;800&display=swap" rel="stylesheet">
+
+<script>
+window.bootStage = 'Загружаем подключение к Firebase';
+window.setBootStage = function(message) {
+  window.bootStage = message;
+  const status = document.getElementById('boot-status');
+  if (status) status.textContent = message;
+};
+window.showBootFailure = function(error) {
+  if (window.bootComplete) return;
+  const box = document.getElementById('boot-screen');
+  if (!box) return;
+  box.hidden = false;
+  document.getElementById('boot-title').textContent = 'Не удалось открыть вечеринку';
+  const code = String(error?.code || '');
+  let message = 'Подключение затянулось. Проверь интернет и нажми «Попробовать снова». Если не поможет, попробуй другой браузер или сеть.';
+  if (code === 'auth/operation-not-allowed' || code === 'auth/admin-restricted-operation') message = 'Firebase не разрешает анонимный вход. Организатору: проверь способ входа Anonymous.';
+  else if (/permission.denied/i.test(code + ' ' + (error?.message || ''))) message = 'Firebase отклонил чтение данных. Организатору: проверь опубликованные правила Realtime Database.';
+  else if (/storage|web-storage|unsupported/i.test(code)) message = 'Браузер не разрешает сохранять вход. Открой сайт в обычном браузере с разрешённым хранилищем.';
+  else if (code === 'auth/network-request-failed') message = 'Не удалось связаться с Firebase. Проверь интернет или попробуй другую сеть.';
+  document.getElementById('boot-help').textContent = message;
+  document.getElementById('boot-status').textContent = 'Этап: ' + window.bootStage + (code ? ' · ' + code : '');
+  document.getElementById('boot-retry').hidden = false;
+};
+</script>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getDatabase, ref, push, set, onValue, get, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+  import { getAuth, signInAnonymously, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+  // ===== НАСТРОЙКИ FIREBASE =====
+  const firebaseConfig = {
+    apiKey: "AIzaSyD2N0o0fEY6rDtPqHdDB8bgfnK4hLsmjBw",
+    authDomain: "helldud-95068.firebaseapp.com",
+    databaseURL: "https://helldud-95068-default-rtdb.europe-west1.firebasedatabase.app/",
+    projectId: "helldud-95068",
+    messagingSenderId: "121593657346",
+    appId: "1:121593657346:web:874811c659b5b9f467cf1b",
+    measurementId: "G-8P9TJW9XF3"
+  };
+
+  try {
+    if (!firebaseConfig.databaseURL) throw new Error('Организатору: добавь databaseURL в настройки Firebase внутри index.html.');
+    const app = initializeApp(firebaseConfig);
+    window.setBootStage('Восстанавливаем вход в этом браузере');
+    const auth = getAuth(app);
+    await setPersistence(auth, browserLocalPersistence);
+    await auth.authStateReady();
+    window.setBootStage('Подключаем анонимный вход');
+    if (!auth.currentUser) await signInAnonymously(auth);
+    window.FB = {
+      db: getDatabase(app), uid: auth.currentUser.uid,
+      ref, push, set, onValue, get, runTransaction
+    };
+    document.dispatchEvent(new Event('fb-ready'));
+  } catch (error) {
+    window.FB_ERROR = error;
+    window.showBootFailure(error);
+    document.dispatchEvent(new Event('fb-error'));
+  }
+</script>
+
+
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0a0612; --orange: #ff7a18; --orange-soft: rgba(255,122,24,.15);
+    --purple: #a855f7; --text: #f3e9ff; --muted: #a99bb8;
+    --card: rgba(255,255,255,.04); --border: rgba(255,122,24,.25); --radius: 16px;
+  }
+  body { font-family: 'Rubik', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; line-height: 1.6; overflow-x: hidden; }
+  body::before {
+    content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background:
+      radial-gradient(ellipse at 20% 0%, rgba(168,85,247,.18), transparent 50%),
+      radial-gradient(ellipse at 80% 100%, rgba(255,122,24,.12), transparent 50%),
+      radial-gradient(ellipse at 50% 50%, rgba(20,10,35,.5), transparent 70%);
+  }
+  [hidden] { display: none !important; }
+
+  .container { max-width: 1100px; margin: 0 auto; padding: 40px 24px; }
+  h2 { font-size: clamp(1.5rem, 4vw, 2.2rem); font-weight: 800; margin-bottom: 8px; }
+  .section-sub { color: var(--muted); margin-bottom: 32px; }
+
+  /* WAIT SCREEN */
+  #screen-wait { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 40px 20px; }
+  #screen-wait h1 { font-family: 'Ruslan Display', serif; font-size: clamp(2rem, 7vw, 4rem); color: var(--orange); text-shadow: 0 0 30px rgba(255,122,24,.5); margin-bottom: 16px; }
+  #screen-wait p { color: var(--muted); margin-bottom: 8px; font-size: 1.05rem; }
+  .countdown { display: flex; gap: 12px; margin-top: 28px; flex-wrap: wrap; justify-content: center; }
+  .countdown span { display: flex; flex-direction: column; align-items: center; min-width: 68px; padding: 12px 8px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; font-size: 1.7rem; font-weight: 800; color: var(--orange); font-variant-numeric: tabular-nums; }
+  .countdown small { font-size: .62rem; color: var(--muted); font-weight: 400; text-transform: uppercase; letter-spacing: .05em; }
+
+  /* DIALOGS */
+  dialog { color: #fff0e5; border: none; padding: 0; background: transparent; max-width: 100vw; }
+  dialog::backdrop { background: rgba(0,0,0,.8); }
+  #charFormDialog { width: 100vw; height: 100vh; max-height: 100vh; display: none; }
+  #charFormDialog[open] { display: flex; align-items: center; justify-content: center; padding: 20px; overflow-y: auto; }
+  .form-card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 28px; width: 100%; max-width: 560px; position: relative; max-height: calc(100vh - 40px); overflow-y: auto; }
+  .form-card h3 { color: var(--orange); font-family: 'Ruslan Display', serif; font-size: 1.8rem; margin-bottom: 6px; text-align: center; }
+  .form-card .hint { color: var(--muted); font-size: .9rem; text-align: center; margin-bottom: 24px; }
+  .field { margin-bottom: 16px; }
+  .field label { color: #fff0e5; display: block; margin-bottom: 6px; font-weight: 600; font-size: .9rem; }
+  .field label .req { color: var(--orange); }
+  input[type=text], textarea, select {
+    width: 100%; padding: 11px 14px; background: rgba(0,0,0,.35);
+    border: 1px solid rgba(255,255,255,.1); border-radius: 10px;
+    color: var(--text); font-family: inherit; font-size: 16px;
+    transition: border-color .2s, box-shadow .2s;
+  }
+  input:focus, textarea:focus, select:focus { outline: none; border-color: var(--orange); box-shadow: 0 0 0 3px rgba(255,122,24,.2); }
+  textarea { resize: vertical; min-height: 60px; }
+  .btn { display: inline-block; padding: 13px 26px; border-radius: 999px; border: none; background: linear-gradient(135deg, var(--orange), #ff9a4a); color: #1a0a00; font-weight: 800; font-size: 1rem; cursor: pointer; transition: transform .15s, box-shadow .2s; font-family: inherit; box-shadow: 0 8px 24px rgba(255,122,24,.3); }
+  .btn:hover { transform: translateY(-2px); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+  .btn-full { width: 100%; }
+  .btn-ghost { background: transparent; color: var(--muted); border: 1px solid rgba(255,255,255,.15); box-shadow: none; }
+  .btn-ghost:hover { color: var(--text); }
+  .close-x { position: absolute; top: 12px; right: 12px; background: rgba(0,0,0,.6); border: none; color: #fff; width: 36px; height: 36px; border-radius: 50%; font-size: 1.1rem; cursor: pointer; z-index: 2; }
+
+  /* PARTY */
+  #screen-party { min-height: 100vh; }
+  .hero { text-align: center; padding: 80px 20px 40px; }
+  .hero h1 { font-family: 'Ruslan Display', serif; font-size: clamp(2.5rem, 9vw, 5rem); color: var(--orange); text-shadow: 0 0 30px rgba(255,122,24,.6), 0 0 60px rgba(255,122,24,.3); line-height: 1.1; margin-bottom: 12px; }
+  .hero p { color: var(--muted); font-size: 1.1rem; }
+
+
+
+  /* Carousel */
+  .carousel-wrap { position: relative; }
+  .carousel { display: flex; gap: 14px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 4px 4px 12px; }
+  .carousel::-webkit-scrollbar { height: 6px; }
+  .carousel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .char-card { flex: 0 0 240px; scroll-snap-align: start; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; cursor: pointer; transition: transform .2s, border-color .2s; position: relative; }
+  .char-card:hover { transform: translateY(-3px); border-color: var(--orange); }
+  .char-card .info { padding: 12px; }
+  .char-card .name { font-weight: 800; font-size: 1rem; }
+  .char-card .persona { color: var(--orange); font-size: .85rem; margin-bottom: 4px; }
+  .char-card .quote { color: var(--muted); font-size: .8rem; font-style: italic; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .like-btn { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,.65); border: 1px solid rgba(255,255,255,.15); color: #fff; border-radius: 999px; padding: 6px 12px; font-size: .9rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px; backdrop-filter: blur(6px); transition: background .2s; font-family: inherit; }
+  .like-btn:hover { background: rgba(255,122,24,.3); }
+  .like-btn.liked { background: var(--orange); color: #1a0a00; }
+  .empty { color: var(--muted); text-align: center; padding: 32px; grid-column: 1/-1; }
+
+  .character-banner { display: flex; align-items: center; justify-content: center; min-height: 130px; font-size: 3rem; background: linear-gradient(135deg, #30134f, #402014); border-bottom: 1px solid var(--border); }
+  .char-full .character-banner { min-height: 110px; }
+  .char-card .info, .char-full .body { overflow-wrap: anywhere; }
+
+  /* Fullscreen char */
+  #charDialog { width: 100vw; height: 100vh; max-height: 100vh; display: none; }
+  #charDialog[open] { display: flex; align-items: center; justify-content: center; }
+  .char-full { background: var(--bg); border-radius: 16px; max-width: 480px; width: 92vw; max-height: 90vh; overflow-y: auto; position: relative; }
+  .char-full .body { padding: 22px; }
+  .char-full h3 { font-size: 1.4rem; color: var(--orange); margin-bottom: 2px; }
+  .char-full .persona { color: var(--orange); margin-bottom: 14px; }
+  .char-full .row { margin-bottom: 10px; font-size: .92rem; }
+  .char-full .row b { color: #ffd0a8; display: block; font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 2px; }
+  .char-full .row i { color: var(--muted); }
+
+  /* Menu modal */
+
+  /* Feedback */
+  .feedback-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 28px; max-width: 640px; margin: 0 auto; }
+  .rating { display: flex; gap: 8px; flex-wrap: wrap; }
+  .rating label { cursor: pointer; }
+  .rating input { position: absolute; opacity: 0; pointer-events: none; }
+  .rating span { display: inline-block; padding: 8px 12px; border: 1px solid rgba(255,255,255,.12); border-radius: 8px; background: rgba(0,0,0,.25); transition: all .15s; font-size: .9rem; }
+  .rating input:checked + span { background: var(--orange-soft); border-color: var(--orange); color: var(--orange); }
+  .radio-group { display: flex; gap: 10px; flex-wrap: wrap; }
+  .pill { cursor: pointer; }
+  .pill input { position: absolute; opacity: 0; pointer-events: none; }
+  .pill span { display: inline-block; padding: 9px 14px; border: 1px solid rgba(255,255,255,.12); border-radius: 999px; background: rgba(0,0,0,.25); transition: all .15s; font-size: .9rem; }
+  .pill input:checked + span { background: var(--orange-soft); border-color: var(--orange); color: var(--orange); }
+
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(100px); background: var(--orange); color: #1a0a00; padding: 12px 22px; border-radius: 999px; font-weight: 700; box-shadow: 0 8px 24px rgba(0,0,0,.4); opacity: 0; transition: all .3s; z-index: 200; font-size: .95rem; }
+  .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+  footer { text-align: center; padding: 32px 20px; color: var(--muted); font-size: .85rem; border-top: 1px solid rgba(255,255,255,.06); margin-top: 60px; }
+
+  @media (max-width: 480px) { .container { padding: 32px 16px; } .form-card { padding: 22px; } }
+
+  #screen-vote { padding-top: 70px; min-height: 100vh; }
+  #vote-title { font-family: 'Ruslan Display', serif; color: var(--orange); }
+  .vote-eyebrow { color: #ffe1c7; margin-bottom: 18px; }
+  .vote-navigation, .vote-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 16px 0; }
+  .vote-navigation { color: var(--muted); }
+  .drink-carousel { display: flex; gap: 16px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 6px 2px 20px; }
+  .drink-card { flex: 0 0 260px; scroll-snap-align: start; background: #180e26; border: 2px solid #3b2848; border-radius: 20px; padding: 22px; display: flex; flex-direction: column; color: #fff0e5; }
+  .drink-card.selected { border-color: #ff9b52; background: #2a1830; }
+  .drink-art { font-size: 64px; text-align: center; padding: 20px 0; background: radial-gradient(ellipse, #542849, transparent 72%); }
+  .drink-card h3 { margin: 12px 0 8px; font-size: 1.2rem; }
+  .drink-card p { font-size: .88rem; color: #e0d2e8; margin-bottom: 18px; }
+  .drink-card .drink-type { font-size: .75rem; color: #ffd1ab; }
+  .drink-card button { margin-top: auto; padding: 10px 14px; }
+  #vote-status { color: #ffd1ab; min-height: 2em; }
+  .drink-result { padding: 14px 0; border-bottom: 1px solid var(--border); }
+  .drink-result p { color: var(--muted); font-size: .85rem; }
+  #vote-done { margin-top: 24px; }
+  @media(max-width:480px) { .vote-actions { flex-wrap:wrap; } .vote-actions .btn { margin-left:auto; } .drink-card { flex-basis: 82vw; max-width: 290px; } }
+  #vote-status:empty { display:none; }
+  .has-voted .vote-navigation, .has-voted .drink-carousel, .has-voted .vote-actions { display:none; }
+  .drink-card p { line-height:1.85; }
+  #drink-ranking { padding:20px 0 28px; display:grid; gap:20px; }
+  .drink-chart-label { display:flex; justify-content:space-between; gap:12px; color:#fff0e5; margin-bottom:9px; font-size:.9rem; }
+  .drink-chart-label small { display:inline-block; color:#ffc58d; margin-left:8px; font-size:.7rem; }
+  .drink-chart-track { height:16px; background:#30203f; border-radius:20px; margin-right:12px; }
+  .drink-chart-fill { height:100%; position:relative; border-radius:20px; background:linear-gradient(90deg,#654187,#b27bd2); transition:width .4s ease; }
+  .drink-chart-fill span { position:absolute; right:-12px; top:50%; transform:translateY(-50%); font-size:24px; }
+  .is-leader .drink-chart-fill { background:linear-gradient(90deg,#d66b2c,#ffc277); box-shadow:0 0 16px #ff9b5233; }
+  .is-leader .drink-chart-label { color:#ffd1ab; font-weight:700; }
+  .chosen-drinks { position:relative; height:350px; margin:24px auto 0; max-width:480px; }
+  .chosen-drink { position:absolute; left:50%; top:24px; width:190px; height:265px; margin-left:-95px; border:1px solid #eadbd1; border-radius:14px; background:linear-gradient(135deg,#fffaf2,#ede3db); color:#25142c; box-shadow:0 14px 32px #0006; padding:42px 20px 30px; display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; transform-origin:50% 90%; transform:translateX(var(--offset)) rotate(var(--angle)); animation:deal-card .65s backwards; animation-delay:calc(var(--card-index) * .12s); transition:transform .25s ease,box-shadow .25s ease; font-family:inherit; }
+  .chosen-drink:nth-child(2) { color:#a42d40; }
+  .chosen-corner { position:absolute; left:13px; top:8px; font-size:30px; line-height:1; }
+  .chosen-bottom { left:auto; top:auto; right:13px; bottom:8px; transform:rotate(180deg); }
+  .chosen-art { font-size:54px; line-height:1.3; margin-bottom:14px; }
+  .chosen-name { font-weight:800; font-size:17px; line-height:1.25; text-align:center; }
+  .chosen-caption { margin-top:12px; font-size:10px; text-transform:uppercase; letter-spacing:2px; opacity:.65; }
+  .chosen-drink:hover,.chosen-drink:focus-visible,.chosen-drink[aria-pressed="true"] { transform:translateX(var(--offset)) translateY(-22px) rotate(0deg); z-index:5; box-shadow:0 18px 36px #0008; }
+  .chosen-drink:focus-visible { outline:3px solid #ff9b52; outline-offset:4px; }
+  @keyframes deal-card { from { opacity:0; transform:translateX(0) translateY(30px) rotate(0deg) scale(.92); } to { opacity:1; transform:translateX(var(--offset)) rotate(var(--angle)); } }
+  @media(max-width:480px) { .chosen-drinks { height:300px; } .chosen-drink { width:150px; height:225px; margin-left:-75px; transform:translateX(calc(var(--offset) * .7)) rotate(var(--angle)); padding:35px 14px 25px; } .chosen-art { font-size:42px; } .chosen-name { font-size:14px; } .chosen-drink:hover,.chosen-drink:focus-visible,.chosen-drink[aria-pressed="true"] { transform:translateX(calc(var(--offset) * .7)) translateY(-18px) rotate(0deg); } @keyframes deal-card { from { opacity:0; transform:translateY(25px) scale(.92); } to { opacity:1; transform:translateX(calc(var(--offset) * .7)) rotate(var(--angle)); } } }
+  @media(prefers-reduced-motion:reduce) { .chosen-drink { animation:none; transition:none; } }
+  .characters-main { padding-top:20px; padding-bottom:64px; min-height:60vh; }
+  .characters-main h2 { color:var(--orange); font-family:'Ruslan Display',serif; font-size:clamp(2rem,5vw,3.4rem); }
+  .characters-main .carousel { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:20px; overflow:visible; }
+  .characters-main .char-card { min-width:0; }
+  @media(max-width:540px) { .characters-main .carousel { grid-template-columns:1fr; } }
+  #cocktailDialog { padding:0; width:min(420px,calc(100vw - 32px)); max-height:85vh; border:1px solid #eadbd1; border-radius:20px; background:#fff6eb; color:#2b1733; overflow:auto; }
+  .cocktail-detail-card { position:relative; padding:35px 28px; }
+  .cocktail-detail-art { font-size:64px; text-align:center; }
+  #cocktail-detail h2 { color:#713144; text-align:center; font-size:1.6rem; margin:12px 0 24px; }
+  .cocktail-detail-label { font-weight:700; margin-bottom:10px; }
+  #cocktail-detail ul { padding-left:22px; line-height:1.9; }
+  #closeCocktailBtn { color:#2b1733; }
+
+  /* ===== АДАПТИВНОЕ ЦЕНТРИРОВАНИЕ И КАРТОЧКИ С МЫШКАМИ ===== */
+  dialog { position:fixed; inset:0; margin:auto; }
+  #cocktailDialog { margin:auto; width:min(420px,calc(100vw - 32px)); max-height:calc(100dvh - 32px); }
+  .cocktail-detail-card { padding:56px 28px 48px; }
+  .bat-corner { position:absolute; top:14px; left:14px; font-size:24px; line-height:1; pointer-events:none; }
+  .bat-bottom { top:auto; left:auto; bottom:14px; right:14px; transform:rotate(180deg); }
+  .chosen-corner { font-size:24px; }
+  .chosen-drink:nth-child(2) { color:#25142c; }
+  .drink-card { position:relative; background:linear-gradient(135deg,#fffaf2,#ede3db); color:#25142c; border:2px solid #eadbd1; padding:40px 22px; text-align:center; }
+  .drink-card.selected { background:#fff0db; border-color:#ff7a18; box-shadow:inset 0 0 0 2px #ff7a18; }
+  .drink-card h3 { color:#713144; }
+  .drink-card p { color:#432d4a; }
+  .drink-card .drink-type { color:#785368; }
+  .drink-card .drink-art { background:radial-gradient(ellipse,#e8d7e7,transparent 72%); }
+  .drink-card .btn-ghost { color:#432d4a; border-color:#9c7d9f; }
+  .drink-card.selected .btn { background:#ff7a18; color:#261126; }
+  .drink-carousel { scroll-snap-type:x mandatory; }
+  .drink-card { scroll-snap-align:center; }
+  #screen-vote > h2, #screen-vote > .vote-eyebrow, .characters-main > h2, .characters-main > .section-sub { text-align:center; }
+  #vote-done { display:block; margin:24px auto; }
+  .characters-main .carousel { display:flex; flex-wrap:wrap; justify-content:center; }
+  .characters-main .char-card { flex:0 1 300px; width:100%; }
+  @media(max-width:480px) {
+    .drink-carousel { padding-inline:calc((100% - 260px)/2); }
+    .drink-card { flex:0 0 260px; max-width:260px; }
+    .chosen-drink { width:140px; margin-left:-70px; }
+    .cocktail-detail-card { padding:54px 22px 44px; }
+  }
+  @media(max-width:350px) { .chosen-drinks { transform:scale(.88); } }
+
+  .color-picker { border:0; margin:22px 0; padding:0; }
+  .color-picker legend { margin-bottom:14px; color:#fff0e5; }
+  .color-options { display:grid; grid-template-columns:repeat(4,1fr); gap:16px 8px; }
+  .color-option { display:flex; flex-direction:column; align-items:center; gap:6px; cursor:pointer; position:relative; }
+  .color-option input { position:absolute; opacity:0; width:40px; height:40px; }
+  .color-option > span { width:36px; height:36px; border-radius:50%; border:3px solid transparent; }
+  .color-option input:checked + span { outline:2px solid #fff0e5; outline-offset:3px; border-color:#2b1733; }
+  .color-option input:focus-visible + span { outline:3px dashed #ff7a18; outline-offset:4px; }
+  .color-option small { font-size:10px; color:#fff0e5; }
+  .guest-card, #charFull { background:var(--guest-color,#ffd2b3); color:#2c2034; border:1px solid var(--guest-color,#ffd2b3); }
+  .guest-card { display:flex; flex-direction:column; }
+  .guest-heading { padding:24px 22px 20px; display:flex; align-items:flex-start; gap:12px; border-bottom:1px solid #2c203425; }
+  .guest-heading h3, #charFull .guest-heading h3 { color:#2c2034; font-size:1.6rem; line-height:1.2; overflow-wrap:anywhere; flex:1; margin:0; }
+  .guest-heading .like-btn { position:static; flex-shrink:0; margin-left:auto; background:#ffffff80; color:#2c2034; border-color:#2c203430; backdrop-filter:none; }
+  .guest-heading .like-btn.liked { background:#2c2034; color:#fff6eb; }
+  .guest-details { padding:22px; display:flex; flex-direction:column; flex:1; gap:20px; overflow-wrap:anywhere; }
+  .guest-field { display:flex; flex-direction:column; gap:5px; }
+  .guest-details small { display:block; color:#61506a; font-size:.72rem; letter-spacing:.04em; margin-bottom:5px; }
+  .guest-mood { margin-top:auto; padding-top:18px; border-top:1px dashed #2c203450; }
+  .guest-mood strong { font-size:1.2rem; }
+  #charFull .guest-heading { padding-right:62px; }
+  #closeCharBtn { color:#2c2034; background:#ffffff90; }
+  .guest-actions { display:flex; justify-content:flex-end; padding:0 22px 22px; }
+  .guest-actions .btn { color:#2c2034; border-color:#2c203440; background:#ffffff80; }
+
+  /* ===== ТЁМНЫЕ КАРТОЧКИ ГОСТЕЙ ===== */
+  .guest-card, #charFull { background:#1c1424; color:#f3e9ff; border:1px solid var(--border); }
+  .guest-heading { background:linear-gradient(135deg,#351747,#39201b); border-bottom:1px solid var(--border); }
+  .guest-heading h3, #charFull .guest-heading h3 { color:#fff0e5; }
+  .guest-details small { color:#bdaacb; }
+  .guest-field strong { color:var(--orange); }
+  .guest-mood { border-top:1px dashed #ffffff26; }
+  .guest-mood strong { color:#ffd0a8; }
+  .guest-heading .like-btn { background:#100a16b3; color:#fff0e5; border-color:#ffffff26; }
+  .guest-heading .like-btn.liked { background:var(--orange); color:#241020; }
+  #closeCharBtn { color:#fff0e5; background:#100a16b3; }
+  .guest-actions .btn { background:#100a16b3; color:#fff0e5; border-color:#ffffff26; }
+  .vote-notice { text-align:center; padding:18px 20px; margin:0 auto 22px; max-width:650px; background:#241528; border:4px solid var(--orange); border-radius:16px; font-weight:600; color:#fff0e5; box-shadow:0 0 20px #ff7a1826; }
+  [data-character-vote]:disabled { opacity:.55; cursor:not-allowed; }
+</style>
+</head>
+<body>
+<section id="boot-screen" style="max-width:560px;margin:12vh auto;padding:28px;border:4px solid #ff7a18;border-radius:20px;background:#1c1424;text-align:center;width:calc(100% - 32px)" aria-live="polite">
+  <h2 id="boot-title">Бу! Подключаемся 🎃</h2>
+  <p id="boot-status">Загружаем подключение к Firebase</p>
+  <p id="boot-help" style="margin:16px 0;color:#bdaacb">Проверяем вход и сохранённую анкету. Обычно это занимает несколько секунд.</p>
+  <button type="button" id="boot-retry" class="btn" hidden onclick="location.reload()">Попробовать снова</button>
+  <noscript>Для сайта нужен JavaScript. Разреши его в настройках браузера и обнови страницу.</noscript>
+</section>
+<script>
+window.setBootStage(window.bootStage);
+window.bootWatchdog = setTimeout(() => window.showBootFailure({code:'connection-timeout'}), 20000);
+</script>
+
+<!-- WAIT SCREEN -->
+<section id="screen-wait" hidden>
+  <h1>🎃 Скоро...</h1>
+  <p>Спасибо! Твоя карточка принята.</p>
+  <p>Суббота 31.10 в 18:00</p>
+  <div class="countdown" id="countdownWait"></div>
+  <button class="btn btn-ghost" id="show-drink-votes" style="margin-top:24px">🍹 Посмотреть голоса за коктейли</button>
+</section>
+
+<!-- COCKTAIL VOTE -->
+<section id="screen-vote" class="container" hidden aria-labelledby="vote-title">
+  <p class="vote-eyebrow">Суббота 31.10 · 18:00</p>
+  <h2 id="vote-title">Что нальём в ведьмин котёл?</h2>
+  <div class="vote-navigation"><span>Листай и выбирай →</span><div><button type="button" class="btn btn-ghost" id="vote-prev" aria-label="Предыдущие коктейли">←</button> <button type="button" class="btn btn-ghost" id="vote-next" aria-label="Следующие коктейли">→</button></div></div>
+  <div id="drink-carousel" class="drink-carousel"></div>
+  <div class="vote-actions"><span id="vote-count" aria-live="polite">Выбрано 0 из 3</span><button id="vote-submit" class="btn" disabled>ОК · отправить 3 голоса</button></div>
+  <p id="vote-status" role="status" aria-live="polite"></p>
+  <div id="drink-results" hidden><div id="drink-ranking"></div><div id="chosen-drinks" class="chosen-drinks" aria-label="Твои три коктейля"></div><button class="btn" id="vote-done">Готово · дальше →</button></div>
+</section>
+
+<!-- CHAR FORM -->
+<dialog id="charFormDialog">
+  <div class="form-card">
+    <button class="close-x" id="closeFormBtn" hidden>✕</button>
+    <h3>Анкета гостя</h3>
+    <p class="hint">это я, а это кто</p>
+    <form id="charForm">
+      <div class="field">
+        <label for="name">Имя <span class="req">*</span></label>
+        <input type="text" id="name" required maxlength="40" placeholder="Как тебя зовут?">
+      </div>
+      <div class="field">
+        <label for="persona">Персонаж <span class="req">*</span></label>
+        <input type="text" id="persona" required maxlength="60" placeholder="Вампир, ведьма, зондби...">
+      </div>
+      <div class="field"><label for="favorite">Любимый ужастик</label><input type="text" id="favorite" maxlength="80" placeholder="«Звонок», Silent Hill…"></div>
+      <div class="field"><label for="mood">Настрой на вечер одним словом</label><input type="text" id="mood" maxlength="30" pattern="[^\s]+" title="Одно слово без пробелов" placeholder="Зловещий"></div>
+      <div class="field"><label for="soundtrack">Саундтрек вечера</label><input id="soundtrack" type="text" maxlength="120" placeholder="Исполнитель - название трека"></div>
+      <button type="submit" class="btn btn-full" id="submitBtn">🎃 Отправить</button>
+    </form>
+  </div>
+</dialog>
+
+<!-- PARTY -->
+<div id="screen-party" hidden>
+
+  <header class="hero">
+    <h1>Бу! Испугался?</h1>
+    <p>Добро пожаловать на вечеринку 🎃</p>
+  </header>
+
+
+
+  <section class="container characters-main">
+    <h2>Кто есть кто</h2>
+    <p id="character-vote-status" class="vote-notice" role="status" aria-live="polite">Подключаемся…</p>
+    <div class="carousel-wrap">
+      <div class="carousel" id="carousel"></div>
+    </div>
+    <div style="margin-top:16px;">
+      <button class="btn btn-ghost" id="addLateBtn">🎃 Создать карточку</button>
+    </div>
+  </section>
+
+  <footer>Сделано с 🎃 для своих</footer>
+</div>
+
+<!-- FULLSCREEN CHAR -->
+<dialog id="cocktailDialog" aria-labelledby="cocktail-detail-title">
+  <div class="cocktail-detail-card"><button type="button" class="close-x" id="closeCocktailBtn" aria-label="Закрыть">✕</button><div id="cocktail-detail"></div></div>
+</dialog>
+<dialog id="charDialog">
+  <div class="char-full" id="charFull">
+    <button class="close-x" id="closeCharBtn">✕</button>
+    <div id="charFullContent"></div>
+  </div>
+</dialog>
+
+
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* ============ ⚙️ НАСТРОЙКИ ============ */
+const PARTY_DATE = new Date('2026-10-31T10:00:00+03:00');
+
+const MENU = {
+  dishes: [
+    {
+      icon: '🖐️',
+      name: 'Пальцы печенья с миндалём',
+      count: '~40 шт',
+      ingredients: 'Мука 400 г · масло сливочное 200 г · сахар 150 г · яйца 2 шт · ваниль, соль · миндаль целый 100 г · красный джем для «крови»',
+      howto: 'Замесить тесто, сформировать пальцы, выпечь. Миндаль вставить сразу после выпечки, пока печенье мягкое. Срез смазать джемом.'
+    },
+    {
+      icon: '🍬',
+      name: 'Мармелад обычный',
+      count: '500 г',
+      ingredients: 'Готовый мармелад (или домашний: желатин + сок + сахар)',
+      howto: 'Разложить по маленьким баночкам с этикетками «мозги», «сердце», «пальцы». Выглядит как реквизит.'
+    },
+    {
+      icon: '🐛',
+      name: 'Мармеладные черви',
+      count: '2-3 упаковки',
+      ingredients: 'Готовые (Haribo, Crazy Factory)',
+      howto: 'Воткнуть червей в шоколадный пудинг - «земля с червями». Или в красное желе - «кровавая почва».'
+    },
+    {
+      icon: '🚬',
+      name: '«Сигареты» из солёных палочек',
+      count: '~40-50 шт',
+      ingredients: 'Солёные палочки 200-250 г · белый шоколад / белая глазурь 200-300 г · шоколадное печенье 200 г (в крошку)',
+      howto: 'Растопить белый шоколад, обмакнуть палочку на 2/3, кончик обвалять в шоколадной крошке («пепел»). Выложить на пергамент до застывания.'
+    },
+    {
+      icon: '🧁',
+      name: 'Кексы с глазами',
+      count: '20 шт',
+      ingredients: 'Готовые кексы / маффины 20 шт · белая глазурь / мастика 300 г · тёмный шоколад или M&M для зрачков 200 г · красный джем',
+      howto: 'На каждый кекс - 2 шарика из глазури, вставить зрачок. Капля красного джема - «веко».'
+    },
+    {
+      icon: '🌭',
+      name: 'Сосиски в тесте «Мумии»',
+      count: '40 шт',
+      ingredients: 'Сосиски 40 шт (~2 кг) · слоёное тесто 4-5 упак (~2 кг) · горчица / кетчуп для глаз · кунжут',
+      howto: 'Обмотать сосиску полосками теста крест-накрест. Выпечь при 200°C ~20 мин. Точки глаз - горчицей.'
+    },
+    {
+      icon: '🧠',
+      name: '«Мозги» - крабовый салат',
+      count: '1 большой «мозг»',
+      ingredients: 'Крабовые палочки 500 г · сыр 300 г · чеснок 1 головка · майонез 400 г · зелень 1 пучок · паприка',
+      howto: 'Смешать ингредиенты, сформировать полусферу. Вилкой сделать «извилины», посыпать паприкой. Сверху - «кровь» из кетчупа.'
+    },
+    {
+      icon: '🪦',
+      name: '«Кладбище» - гуакамоле с чипсами',
+      count: 'Большая миска',
+      ingredients: 'Авокадо 7-8 шт · лайм 4 шт · помидоры 2 шт · красный лук 1 шт · кинза 1 пучок · соль · чипсы-тортильи 3 упак',
+      howto: 'Размять авокадо, добавить сок лайма, нарезанные овощи, кинзу. На чипсах зубочисткой нацарапать «R.I.P.» и имена.'
+    },
+    {
+      icon: '👁️',
+      name: '«Глаза» из моцареллы и оливок',
+      count: '~40 «глаз»',
+      ingredients: 'Моцарелла мини 250 г (~40 шариков) · салями 200 г · оливки без косточки 200 г · зубочистки',
+      howto: 'На зубочистку: кружок салями → шарик моцареллы → половинка оливки (зрачок). Готово за 10 минут.'
+    },
+    {
+      icon: '⚰️',
+      name: '«Гробы» - бутерброды',
+      count: '40 шт',
+      ingredients: 'Хлеб для тостов 40 ломтиков · ветчина или паштет 500 г · сыр 300 г · огурцы 3 шт · масло сливочное 100 г',
+      howto: 'Вырезать хлеб в форме гроба (6-гранник). Внутрь - начинка. Сверху «крест» из полосок сыра.'
+    },
+    {
+      icon: '🎃',
+      name: '«Тыква-хумус»',
+      count: '1 тыква-тарелка',
+      ingredients: 'Маленькая тыква (или мускатная) 1 шт · хумус готовый 500 г (или нут 2 банки + тахини 3 ст.л. + лимон + чеснок 2 зубчика + оливковое масло) · тыквенные семечки 50 г',
+      howto: 'Срезать верх тыквы, вычистить. Поставить внутрь миску с хумусом. Сверху - семечки. Тыква работает как тарелка.'
+    },
+    {
+      icon: '🧟',
+      name: '«Мозги» из желе',
+      count: '1 большой «мозг»',
+      ingredients: 'Желе малиновое / клубничное 3 пачки по 90 г · форма для мозга · сгущёнка 1 банка',
+      howto: 'Залить желе в форму для мозга (или полусферу), дать застыть. Сверху - полоски сгущёнки как «извилины».'
+    },
+    {
+      icon: '🍫',
+      name: 'Шоколадный пудинг с «землёй»',
+      count: '15-20 порций',
+      ingredients: 'Готовый шоколадный пудинг 15-20 стаканчиков · Oreo или шоколадное печенье 2-3 упак · мармеладные черви 2 упак',
+      howto: 'Пудинг в стаканчики, сверху крошка печенья, «закопать» червей в крошку.'
+    },
+    {
+      icon: '💉',
+      name: '«Шприцы с кровью» - шот «Кровь вампира»',
+      count: '~30 шприцев по 20-30 мл',
+      ingredients: 'Водка 500 мл · гренадин 300 мл · вишнёвый или клубничный ликёр 250 мл · сок лайма 100 мл',
+      howto: 'Смешать всё в кувшине, набрать в шприцы без игл, охладить. Один шприц ≈ 20-30 мл. 15 чел × 2 шота = 30 шт.'
+    }
+  ],
+  cocktails: [
+    {
+        "id": "mary",
+        "icon": "🍹🍅",
+        "name": "Кровавая Мэри",
+        "count": "с алкоголем",
+        "ingredients": "Водка · Томатный сок · Лимонный сок · Соль, перец, табаско · Лёд"
+    },
+    {
+        "id": "vampire",
+        "icon": "🍷🍓",
+        "name": "Кровь вампира",
+        "count": "с алкоголем",
+        "ingredients": "Водка · Клубника · Апельсиновый сок · Гренадин · Лёд"
+    },
+    {
+        "id": "zombie",
+        "icon": "🍹🧟",
+        "name": "Тропический зондби",
+        "count": "с алкоголем",
+        "ingredients": "Ром светлый · Ром тёмный · Ананасовый сок · Сок лайма · Гренадин · Лёд"
+    },
+    {
+        "id": "witch",
+        "icon": "🍸✨",
+        "name": "Ведьминское зелье",
+        "count": "с алкоголем",
+        "ingredients": "Джин · Яблочный сок · Сок лайма · Спрайт · Лёд"
+    },
+    {
+        "id": "ghost",
+        "icon": "🍹👻",
+        "name": "Ананасовый призрак",
+        "count": "с алкоголем",
+        "ingredients": "Водка · Ананасовый сок · Апельсиновый сок · Сок лайма · Лёд"
+    },
+    {
+        "id": "kirill",
+        "icon": "🍸🍋",
+        "name": "Джин-тоник для Кирюши",
+        "count": "с алкоголем",
+        "ingredients": "Джин · Тоник · Лайм · Лёд"
+    },
+    {
+        "id": "fizz",
+        "icon": "🍸🍏",
+        "name": "Яблочный джин-физз",
+        "count": "с алкоголем",
+        "ingredients": "Джин · Яблочный сок · Сок лайма · Спрайт · Лёд"
+    }
+]
+};
+
+// ===== ВАРИАНТЫ ГОЛОСОВАНИЯ: ID НЕ МЕНЯТЬ ПОСЛЕ ПЕРВЫХ ГОЛОСОВ =====
+const DRINKS = MENU.cocktails.map(drink => ({ ...drink, art: drink.icon }));
+let drinkSelection = new Set();
+let voteSaved = false;
+let voteBusy = false;
+let voteWriting = false;
+let voteScreenPinned = false;
+let voteListenerStarted = false;
+
+const CONTESTS = [
+  { icon: '🧻', title: 'Мумия', meta: '2-4 пары · 5 мин', steps: ['Разбейтесь на пары.', 'За 2 минуты обмотайте партнёра бумагой.', 'Побеждает самая плотная и быстрая мумия.'] },
+  { icon: '🍎', title: 'Яблоко на нитке', meta: '4+ игроков · 5 мин', steps: ['Подвесьте яблоки на уровне рта.', 'Руки за спину.', 'Кто первым съест - победил.'] },
+  { icon: '🎬', title: 'Ужастик по эмодзи', meta: '2-6 игроков · 10 мин', steps: ['Ведущий показывает эмодзи.', 'Игроки угадывают фильм ужасов.', 'Больше всех угадал - победил.'] },
+  { icon: '🎃', title: 'Тыквенный боулинг', meta: '2-8 игроков · 10 мин', steps: ['Выстройте кегли.', 'С 3 шагов катните тыкву.', 'Сбил больше всех - победил.'] },
+  { icon: '🧹', title: 'Метла-лимпо', meta: 'Все · 10 мин', steps: ['Играет музыка - проходите под метлой.', 'Каждый круг метла ниже.', 'Кто не согнулся - победил.'] },
+  { icon: '🏷️', title: 'Кто я?', meta: '3+ игроков · 10 мин', steps: ['Каждому на лоб стикер с монстром.', 'Задавайте вопросы «да/нет».', 'Кто угадал первым - победил.'] },
+];
+/* ====================================== */
+
+const $ = s => document.querySelector(s);
+// ===== ГОТОВНОСТЬ FIREBASE =====
+const waitForFB = () => new Promise((resolve, reject) => {
+  if (window.FB) return resolve();
+  if (window.FB_ERROR) return reject(window.FB_ERROR);
+  const cleanup = () => {
+    clearTimeout(timer);
+    document.removeEventListener('fb-ready', ready);
+    document.removeEventListener('fb-error', failed);
+  };
+  const ready = () => { cleanup(); resolve(); };
+  const failed = () => { cleanup(); reject(window.FB_ERROR || new Error('Firebase недоступен')); };
+  const timer = setTimeout(() => { cleanup(); reject(new Error('Не удалось загрузить Firebase. Проверь интернет и обнови страницу.')); }, 30000);
+  document.addEventListener('fb-ready', ready, { once: true });
+  document.addEventListener('fb-error', failed, { once: true });
+});
+
+// ===== ЛОКАЛЬНЫЕ ФЛАГИ =====
+const memoryFlags = new Map();
+const localFlags = {
+  removeItem(key) { memoryFlags.delete(key); try { localStorage.removeItem(key); } catch {} },
+  getItem(key) { if(memoryFlags.has(key)) return memoryFlags.get(key); try { return localStorage.getItem(key); } catch { return null; } },
+  setItem(key, value) { memoryFlags.set(key, String(value)); try { localStorage.setItem(key, value); } catch { /* Приватный режим браузера. */ } }
+};
+
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+let toastTimer;
+function toast(msg) {
+  const el = $('#toast'); el.textContent = msg; el.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
+}
+
+
+// ===== АНОНИМНЫЙ УЧАСТНИК И ТРИ ГОЛОСА =====
+const VOTING_START = Date.parse('2026-10-31T18:00:00+03:00');
+let sessionReady = false, ownCharacter = false, connected = false;
+let serverOffset = 0, clockReady = false, ballotsReady = false, ballotBusy = false;
+let characterData = {}, ballots = {};
+function votingOpen() { return clockReady && Date.now() + serverOffset >= VOTING_START; }
+function ownChoices() { return Object.values(ballots[window.FB?.uid] || {}).filter(Boolean); }
+function nextBallot(current, id) {
+  const selected = [current?.first, current?.second, current?.third].filter(Boolean);
+  const index = selected.indexOf(id);
+  if (index >= 0) selected.splice(index, 1);
+  else if (selected.length < 3) selected.push(id);
+  else return undefined;
+  return { first: selected[0] || '', second: selected[1] || '', third: selected[2] || '' };
+}
+function updateVotingUI() {
+  const status = $('#character-vote-status');
+  const choices = ownChoices();
+  status.textContent = !sessionReady ? 'Подключаемся…' : !connected ? 'Нет соединения. Голосование временно недоступно.' : !clockReady ? 'Проверяем время…' : !votingOpen() ? 'Голосование откроется 31 октября в 18:00 по Москве' : !ownCharacter ? 'Заполни карточку, чтобы получить три голоса' : !ballotsReady ? 'Загружаем голоса…' : `Осталось голосов: ${3 - choices.length} из 3. Голос можно снять и переставить.`;
+  $('#addLateBtn').hidden = ownCharacter;
+  $('#addLateBtn').disabled = !sessionReady || !connected;
+  document.querySelectorAll('[data-character-vote]').forEach(button => {
+    const selected = choices.includes(button.dataset.characterVote);
+    button.disabled = !sessionReady || !connected || !votingOpen() || !ownCharacter || !ballotsReady || ballotBusy || (!selected && choices.length >= 3);
+  });
+}
+function rebuildCharacters() {
+  const counts = {};
+  for (const ballot of Object.values(ballots)) for (const id of new Set(Object.values(ballot || {}).filter(Boolean))) counts[id] = (counts[id] || 0) + 1;
+  window.__characters = Object.entries(characterData).map(([id,c]) => ({...c,id,likes:counts[id] || 0})).sort((a,b) => b.likes-a.likes || b.createdAt-a.createdAt);
+  renderCarousel(window.__characters);
+  if ($('#charDialog').open) openChar(window.currentCharacterId);
+  updateVotingUI();
+}
+async function startSession() {
+  try {
+    await waitForFB();
+    const fb = window.FB;
+    fb.onValue(fb.ref(fb.db, '.info/connected'), snap => { connected = snap.val() === true; updateVotingUI(); });
+    fb.onValue(fb.ref(fb.db, '.info/serverTimeOffset'), snap => { serverOffset = Number(snap.val()) || 0; clockReady = true; updateVotingUI(); });
+    window.setBootStage('Загружаем анкету и выбор коктейлей из базы');
+    const [card, drinks] = await Promise.all([fb.get(fb.ref(fb.db,'characters/' + fb.uid)), fb.get(fb.ref(fb.db,'cocktailVotes/' + fb.uid))]);
+    ownCharacter = !!card.val();
+    localFlags.removeItem('char_submitted');
+    if (ownCharacter) localFlags.setItem('char_submitted',fb.uid);
+    if (drinks.val()) { localFlags.setItem('drinks_voted_' + fb.uid,'1'); showSavedDrinkVote(drinks.val()); }
+    else localFlags.removeItem('drinks_voted_' + fb.uid);
+    sessionReady = true;
+    window.bootComplete = true;
+    clearTimeout(window.bootWatchdog);
+    $('#boot-screen').hidden = true;
+    switchScreen();
+    updateVotingUI();
+  } catch(error) {
+    window.showBootFailure(error);
+    $('#character-vote-status').textContent = 'Не удалось подключиться. Обнови страницу после проверки интернета.';
+    $('#submitBtn').disabled = true;
+    $('#addLateBtn').disabled = true;
+    console.error(error);
+    toast('Не удалось войти. Проверь интернет и настройки Firebase.');
+  }
+}
+
+// ===== ТАЙМЕР =====
+function tick() {
+  const diff = PARTY_DATE - new Date();
+  const el = $('#countdownWait');
+  if (!el) return;
+  if (diff <= 0) { el.textContent = '🎃 Время вечеринки!'; return; }
+  const d = Math.floor(diff / 864e5);
+  const h = Math.floor(diff % 864e5 / 36e5);
+  const m = Math.floor(diff % 36e5 / 6e4);
+  const s = Math.floor(diff % 6e4 / 1e3);
+  el.innerHTML = `
+    <span>${d}<small>дней</small></span>
+    <span>${String(h).padStart(2,'0')}<small>часов</small></span>
+    <span>${String(m).padStart(2,'0')}<small>минут</small></span>
+    <span>${String(s).padStart(2,'0')}<small>секунд</small></span>`;
+}
+
+// ===== ЭКРАНЫ =====
+function switchScreen() {
+  if (!sessionReady) return;
+  if ($('#charFormDialog').open && !$('#screen-party').hidden) return;
+  const now = Date.now() + serverOffset;
+  const preview = new URLSearchParams(location.search).get('preview');
+  const submitted = localFlags.getItem('char_submitted');
+  const partyOpen = preview === 'party' || (preview !== 'wait' && now >= PARTY_DATE.getTime());
+
+  const voted = submitted && localFlags.getItem('drinks_voted_' + submitted);
+  if ((voteScreenPinned || (preview !== 'party' && preview !== 'wait' && !partyOpen && !voted)) && submitted) {
+    $('#screen-wait').hidden = true;
+    $('#screen-party').hidden = true;
+    $('#charFormDialog').close();
+    $('#screen-vote').hidden = false;
+    initDrinkVote();
+    return;
+  }
+  $('#screen-vote').hidden = true;
+
+  if (partyOpen) {
+    $('#screen-wait').hidden = true;
+    $('#screen-party').hidden = false;
+    if (!partyInited) $('#charFormDialog').close();
+    initParty();
+    return;
+  }
+  if (submitted || preview === 'wait') {
+    $('#charFormDialog').close();
+    $('#screen-wait').hidden = false;
+    $('#screen-party').hidden = true;
+    tick();
+    return;
+  }
+  $('#screen-wait').hidden = true;
+  $('#screen-party').hidden = true;
+  const dlg = $('#charFormDialog');
+  if (!dlg.open) dlg.showModal();
+}
+
+// ===== КАРТЫ ВЫБРАННЫХ КОКТЕЙЛЕЙ =====
+function renderChosenDrinks() {
+  const hand = $('#chosen-drinks');
+  const selected = [...drinkSelection].map(id => DRINKS.find(drink => drink.id === id)).filter(Boolean);
+  const key = selected.map(drink => drink.id).join(',');
+  if (hand.dataset.selection === key) return;
+  hand.dataset.selection = key;
+  hand.innerHTML = selected.map((drink, index) => `<button type="button" class="chosen-drink" data-cocktail="${esc(drink.id)}" style="--card-index:${index};--angle:${(index - 1) * 13}deg;--offset:${(index - 1) * 82}px" aria-label="${esc(drink.name)}" aria-pressed="false"><span class="chosen-art" aria-hidden="true">${esc(drink.art)}</span><span class="chosen-name">${esc(drink.name)}</span><span class="chosen-caption">Твой выбор</span></button>`).join('');
+}
+$('#chosen-drinks').addEventListener('click', event => {
+  const card = event.target.closest('.chosen-drink');
+  if (!card) return;
+  const drink = DRINKS.find(item => item.id === card.dataset.cocktail);
+  if (!drink) return;
+  $('#cocktail-detail').innerHTML = `<div class="cocktail-detail-art" aria-hidden="true">${esc(drink.art)}</div><h2 id="cocktail-detail-title">${esc(drink.name)}</h2><p class="cocktail-detail-label">Что внутри</p><ul>${drink.ingredients.split(' · ').map(item => `<li>${esc(item)}</li>`).join('')}</ul>`;
+  $('#cocktailDialog').showModal();
+});
+
+$('#closeCocktailBtn').addEventListener('click', () => $('#cocktailDialog').close());
+$('#cocktailDialog').addEventListener('click', event => { if (event.target === $('#cocktailDialog')) $('#cocktailDialog').close(); });
+
+// ===== ГОЛОСОВАНИЕ ЗА КОКТЕЙЛЕЙ =====
+function renderDrinkCards() {
+  const carousel = $('#drink-carousel');
+  const scroll = carousel.scrollLeft;
+  carousel.innerHTML = DRINKS.map(drink => `<article class="drink-card ${drinkSelection.has(drink.id) ? 'selected' : ''}">
+    <div class="drink-art" aria-hidden="true">${esc(drink.art)}</div>
+    <span class="drink-type">${drink.count === 'безалкогольный' ? 'Без алкоголя' : 'С алкоголем'}</span>
+    <h3>${esc(drink.name)}</h3><p>${drink.ingredients.split(' · ').map(esc).join('<br>')}</p>
+    <button class="btn btn-ghost" data-drink="${esc(drink.id)}" aria-pressed="${drinkSelection.has(drink.id)}" ${voteSaved || voteBusy ? 'disabled' : ''}>${drinkSelection.has(drink.id) ? '✓ Выбрано' : '+ Хочу попробовать'}</button></article>`).join('');
+  carousel.scrollLeft = scroll;
+  $('#screen-vote').classList.toggle('has-voted', voteSaved);
+  $('#vote-count').textContent = `Выбрано ${drinkSelection.size} из 3`;
+  $('#vote-submit').disabled = drinkSelection.size !== 3 || voteSaved || voteBusy;
+  $('#vote-submit').textContent = voteSaved ? '✓ Голоса учтены' : voteBusy ? 'Сохраняем…' : 'ОК · отправить 3 голоса';
+}
+function showSavedDrinkVote(vote) {
+  voteSaved = true;
+  drinkSelection = new Set([vote.first, vote.second, vote.third]);
+  const id = localFlags.getItem('char_submitted');
+  if (id) localFlags.setItem('drinks_voted_' + id, '1');
+  $('#vote-status').textContent = '';
+  $('#drink-results').hidden = false;
+  renderChosenDrinks();
+  renderDrinkCards();
+}
+async function initDrinkVote() {
+  if (voteListenerStarted) return;
+  voteListenerStarted = true;
+  voteBusy = true;
+  renderDrinkCards();
+  $('#vote-status').textContent = 'Загружаем голоса…';
+  try {
+    await waitForFB();
+    window.FB.onValue(window.FB.ref(window.FB.db, 'cocktailVotes'), snap => {
+      const votes = Object.values(snap.val() || {});
+      const own = (snap.val() || {})[localFlags.getItem('char_submitted')];
+      if (!voteWriting) {
+        voteBusy = false;
+        if (own) showSavedDrinkVote(own);
+        else { $('#vote-status').textContent = ''; renderDrinkCards(); }
+      }
+      const scores = DRINKS.map(drink => ({ ...drink, total: votes.filter(v => [v.first, v.second, v.third].includes(drink.id)).length })).sort((a,b) => b.total - a.total);
+      const maximum = scores[0]?.total || 0;
+      $('#drink-ranking').innerHTML = scores.map(drink => {
+        const leader = maximum > 0 && drink.total === maximum;
+        return `<div class="drink-chart-row ${leader ? 'is-leader' : ''}"><div class="drink-chart-label"><span>${esc(drink.name)}${leader ? ' <small>Лидер</small>' : ''}</span><b>${drink.total}</b></div><div class="drink-chart-track"><div class="drink-chart-fill" style="width:${maximum ? drink.total / maximum * 100 : 0}%">${drink.total ? '<span aria-hidden="true">🎃</span>' : ''}</div></div></div>`;
+      }).join('');
+    }, error => {
+      voteBusy = true;
+      renderDrinkCards();
+      $('#vote-status').textContent = 'Не удалось загрузить голоса. Попробуй обновить страницу.';
+      console.error(error);
+    });
+  } catch (error) {
+    $('#vote-status').textContent = error.message;
+    voteListenerStarted = false;
+  }
+}
+$('#drink-carousel').addEventListener('click', event => {
+  const button = event.target.closest('[data-drink]');
+  if (!button || voteBusy || voteSaved) return;
+  const id = button.dataset.drink;
+  if (drinkSelection.has(id)) drinkSelection.delete(id);
+  else if (drinkSelection.size < 3) drinkSelection.add(id);
+  else { $('#vote-status').textContent = 'Уже выбраны три. Сними один вариант, чтобы выбрать другой.'; return; }
+  $('#vote-status').textContent = '';
+  renderDrinkCards();
+});
+$('#vote-prev').addEventListener('click', () => $('#drink-carousel').scrollBy({ left: -280, behavior: 'smooth' }));
+$('#vote-next').addEventListener('click', () => $('#drink-carousel').scrollBy({ left: 280, behavior: 'smooth' }));
+$('#vote-submit').addEventListener('click', async () => {
+  if (!sessionReady || !connected) { toast('Нужно подключение к интернету'); return; }
+  if (voteBusy || voteSaved || drinkSelection.size !== 3) return;
+  const id = localFlags.getItem('char_submitted');
+  if (!id) { $('#vote-status').textContent = 'Сначала заполни анкету гостя.'; return; }
+  const [first, second, third] = [...drinkSelection];
+  const vote = { first, second, third, createdAt: Date.now() };
+  voteBusy = true;
+  voteWriting = true;
+  voteScreenPinned = true;
+  renderDrinkCards();
+  try {
+    await waitForFB();
+    const result = await window.FB.runTransaction(window.FB.ref(window.FB.db, 'cocktailVotes/' + id), current => current ? undefined : vote, { applyLocally: false });
+    if (result.committed) showSavedDrinkVote(vote);
+    else { const saved = await window.FB.get(window.FB.ref(window.FB.db,'cocktailVotes/' + id)); if (saved.val()) showSavedDrinkVote(saved.val()); }
+  } catch (error) {
+    $('#vote-status').textContent = 'Голоса не сохранены. Проверь соединение и попробуй ещё раз.';
+    console.error(error);
+  } finally { voteWriting = false; voteBusy = false; renderDrinkCards(); }
+});
+$('#vote-done').addEventListener('click', () => { voteScreenPinned = false; switchScreen(); });
+$('#show-drink-votes').addEventListener('click', () => {
+  if (!localFlags.getItem('char_submitted')) { toast('Для голосования сначала заполни анкету по обычной ссылке.'); return; }
+  voteScreenPinned = true;
+  $('#screen-wait').hidden = true;
+  $('#screen-vote').hidden = false;
+  initDrinkVote();
+});
+
+// ===== ОТПРАВКА АНКЕТЫ =====
+$('#charForm').addEventListener('submit', async e => {
+  e.preventDefault();
+
+  if (!sessionReady || !connected) { toast('Нужно подключение к интернету'); return; }
+  if (ownCharacter) { toast('Твоя карточка уже сохранена'); return; }
+  const name = $('#name').value.trim();
+  const persona = $('#persona').value.trim();
+  if (!name || !persona) { toast('Имя и персонаж обязательны'); return; }
+
+  if (!$('#charForm').reportValidity()) return;
+  const btn = $('#submitBtn');
+  if (btn.disabled) return;
+  btn.disabled = true; btn.textContent = 'Отправляем...';
+
+  try {
+    await waitForFB();
+    const fields = { name, persona, favorite: $('#favorite').value.trim(), mood: $('#mood').value.trim(), soundtrack: $('#soundtrack').value.trim() };
+    const uid = window.FB.uid;
+    const newRef = window.FB.ref(window.FB.db, 'characters/' + uid);
+    const result = await window.FB.runTransaction(newRef, current => current ? undefined : { ...fields, createdAt: Date.now() + serverOffset }, { applyLocally: false });
+    if (!result.committed) { ownCharacter = true; localFlags.setItem('char_submitted',uid); $('#charFormDialog').close(); updateVotingUI(); toast('Карточка уже создана в другой вкладке'); switchScreen(); return; }
+    ownCharacter = true;
+    localFlags.setItem('char_submitted', uid);
+    updateVotingUI();
+    e.target.reset();
+    $('#charFormDialog').close();
+    toast('Карточка сохранена 🦇');
+    switchScreen();
+  } catch (err) {
+    console.error(err);
+    toast('Ошибка: ' + (err.message || 'попробуй ещё раз'));
+  } finally {
+    btn.disabled = false; btn.textContent = '🎃 Отправить';
+  }
+});
+
+// ===== ИНИЦИАЛИЗАЦИЯ =====
+let partyInited = false;
+function initParty() {
+  if (partyInited) return;
+  partyInited = true;
+
+  listenCharacters();
+
+  $('#closeFormBtn').hidden = false;
+  $('#addLateBtn').addEventListener('click', () => { if (ownCharacter || !sessionReady || !connected) return; $('#charForm').reset(); $('#charFormDialog').showModal(); });
+  $('#closeFormBtn').addEventListener('click', () => $('#charFormDialog').close());
+
+}
+
+// ===== ЦВЕТ И СОДЕРЖИМОЕ КАРТОЧКИ =====
+function characterBody(c) {
+  return `<div class="guest-details"><div class="guest-field"><small>Персонаж</small><strong>${esc(c.persona)}</strong></div><div class="guest-field"><small>Любимый ужастик</small><span>${esc(c.favorite || 'Не указан')}</span></div><div class="guest-field"><small>Саундтрек вечера</small><span>${esc(c.soundtrack || 'Не указан')}</span></div><div class="guest-mood"><small>Настрой на вечер</small><strong>${esc(c.mood || 'Не указан')}</strong></div></div>`;
+}
+
+// ===== КАРУСЕЛЬ + ЛАЙКИ =====
+async function listenCharacters() {
+  try {
+    await waitForFB();
+    const fb = window.FB;
+    fb.onValue(fb.ref(fb.db,'characters'), snap => {
+      characterData = snap.val() || {};
+      ownCharacter = !!characterData[fb.uid];
+      if (ownCharacter) localFlags.setItem('char_submitted',fb.uid);
+      else localFlags.removeItem('char_submitted');
+      rebuildCharacters();
+    }, error => { $('#carousel').textContent = 'Не удалось загрузить карточки.'; console.error(error); });
+    fb.onValue(fb.ref(fb.db,'characterVotes'), snap => {
+      ballots = snap.val() || {}; ballotsReady = true; rebuildCharacters();
+    }, error => { ballotsReady = false; updateVotingUI(); toast('Не удалось загрузить голоса'); console.error(error); });
+  } catch(error) { $('#carousel').textContent = error.message; }
+}
+
+function renderCarousel(list) {
+  const el = $('#carousel');
+  const scrollLeft = el.scrollLeft;
+  if (!list.length) {
+    el.innerHTML = '<div class="empty">Пока никто не добавил карточку 👻</div>';
+    return;
+  }
+  el.innerHTML = list.map(c => {
+    const liked = ownChoices().includes(c.id);
+    return `<div class="char-card guest-card" onclick="openChar('${esc(c.id)}')"><div class="guest-heading"><h3>${esc(c.name)}</h3><button data-character-vote="${esc(c.id)}" class="like-btn ${liked ? 'liked' : ''}" aria-label="${liked ? 'Снять голос' : 'Проголосовать'}" aria-pressed="${Boolean(liked)}" onclick="event.stopPropagation(); likeChar('${esc(c.id)}')">🎃 <span>${c.likes || 0}</span></button></div>${characterBody(c)}</div>`;
+  }).join('');
+  el.scrollLeft = scrollLeft;
+  updateVotingUI();
+}
+
+// ===== ПОСТАВИТЬ ИЛИ СНЯТЬ ЛАЙК =====
+window.likeChar = async function(id) {
+  if (ballotBusy || !sessionReady || !connected || !ballotsReady) return;
+  if (!votingOpen()) { toast('Голосование откроется 31 октября в 18:00'); return; }
+  if (!ownCharacter) { toast('Сначала создай свою карточку'); return; }
+  if (!characterData[id]) return;
+  const wasLiked = ownChoices().includes(id);
+  ballotBusy = true; updateVotingUI();
+  try {
+    const fb = window.FB;
+    const result = await fb.runTransaction(fb.ref(fb.db,'characterVotes/' + fb.uid), current => nextBallot(current,id), { applyLocally: false });
+    if (!result.committed) { toast('Все три голоса использованы. Сними один, чтобы выбрать другого.'); return; }
+    toast(wasLiked ? 'Голос снят - можно выбрать другого 👻' : 'Голос учтён 🎃');
+  } catch(error) { console.error(error); toast('Голос не сохранён. Проверь соединение и попробуй снова.'); }
+  finally { ballotBusy = false; updateVotingUI(); }
+};
+
+// ===== FULLSCREEN CARD =====
+window.openChar = function(id) {
+  const c = (window.__characters || []).find(x => x.id === id);
+  if (!c) return;
+  window.currentCharacterId = id;
+  const liked = ownChoices().includes(id);
+  $('#charFullContent').innerHTML = `<div class="guest-heading"><h3>${esc(c.name)}</h3></div>${characterBody(c)}<div class="guest-actions"><button data-character-vote="${esc(c.id)}" class="btn ${liked ? '' : 'btn-ghost'}" aria-label="${liked ? 'Снять голос' : 'Проголосовать'}" aria-pressed="${Boolean(liked)}" onclick="likeChar('${esc(c.id)}')">🎃 ${c.likes || 0}</button></div>`;
+  if (!$('#charDialog').open) $('#charDialog').showModal();
+  updateVotingUI();
+};
+
+$('#charFormDialog').addEventListener('cancel', e => {
+  if ($('#screen-party').hidden) e.preventDefault();
+});
+
+$('#closeCharBtn').addEventListener('click', () => $('#charDialog').close());
+$('#charDialog').addEventListener('click', e => { if (e.target === $('#charDialog')) $('#charDialog').close(); });
+
+// ===== ДИАГНОСТИКА ПОДКЛЮЧЕНИЯ =====
+function showFirebaseError() {
+  const banner = document.createElement('p');
+  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;padding:12px;background:#541b36;color:white;z-index:300;text-align:center;font-size:14px';
+  banner.textContent = window.FB_ERROR?.message || 'Firebase не подключён.';
+  document.body.appendChild(banner);
+}
+document.addEventListener('fb-error', showFirebaseError, { once: true });
+if (window.FB_ERROR) showFirebaseError();
+
+// ===== СТАРТ =====
+startSession();
+setInterval(updateVotingUI, 1000);
+setInterval(tick, 1000);
+setInterval(switchScreen, 30000);
+</script>
+</body>
+</html>
